@@ -25,7 +25,7 @@ const STAKE_DISCRIMINATOR = Buffer.from([0xce, 0xb0, 0xca, 0x12, 0xc8, 0xd1, 0xb
 
 // Dev fee configuration
 const DEV_FEE_WALLET = new PublicKey('9DTThTbggnp2P2ZGLFRfN1A3j5JUsXez1dRJak3TixB2');
-const DEV_FEE_BPS = 50; // 0.5% (50 basis points)
+const DEV_FEE_BPS = 100; // 1% (100 basis points)
 
 // Automation strategies
 export enum AutomationStrategy {
@@ -41,7 +41,7 @@ export function getSquareMask(): number {
   return 0;
 }
 
-// Build development fee transfer instruction (0.5% of deployment amount)
+// Build development fee transfer instruction (1% of deployment amount)
 // Returns null if the wallet is the dev fee wallet (no self-payment)
 export function buildDevFeeTransferInstruction(deploymentAmount: number, walletPublicKey?: PublicKey): TransactionInstruction | null {
   const signerPublicKey = walletPublicKey || getWallet().publicKey;
@@ -52,7 +52,7 @@ export function buildDevFeeTransferInstruction(deploymentAmount: number, walletP
     return null;
   }
 
-  // Calculate fee (0.5% = 50 basis points)
+  // Calculate fee (1% = 100 basis points)
   const feeLamports = Math.floor((deploymentAmount * LAMPORTS_PER_SOL * DEV_FEE_BPS) / 10000);
 
   logger.debug(`Dev fee: ${feeLamports} lamports (${feeLamports / LAMPORTS_PER_SOL} SOL) for ${deploymentAmount} SOL deployment`);
@@ -65,10 +65,11 @@ export function buildDevFeeTransferInstruction(deploymentAmount: number, walletP
 }
 
 // Build Deploy instruction (reverse engineered from ORB transactions)
+// Returns array of instructions: [dev fee transfer (if applicable), deploy]
 export async function buildDeployInstruction(
   amount: number,
   walletPublicKey?: PublicKey
-): Promise<TransactionInstruction> {
+): Promise<TransactionInstruction[]> {
   const signerPublicKey = walletPublicKey || getWallet().publicKey;
   const [minerPDA] = getMinerPDA(signerPublicKey);
   const [automationPDA] = getAutomationPDA(signerPublicKey);
@@ -123,11 +124,21 @@ export async function buildDeployInstruction(
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }, // system program
   ];
 
-  return new TransactionInstruction({
+  const deployInstruction = new TransactionInstruction({
     keys,
     programId: config.orbProgramId,
     data,
   });
+
+  // Build dev fee transfer instruction
+  const feeInstruction = buildDevFeeTransferInstruction(amount, signerPublicKey);
+
+  // Return instructions: fee transfer first (if applicable), then deploy instruction
+  if (feeInstruction) {
+    return [feeInstruction, deployInstruction];
+  } else {
+    return [deployInstruction];
+  }
 }
 
 // Build Automate instruction (setup automated mining)

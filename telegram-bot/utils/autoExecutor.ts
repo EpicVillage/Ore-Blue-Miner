@@ -259,7 +259,7 @@ async function executeUserAutomation(
     // Record transaction
     try {
       const { priceInUsd: orbPriceUsd } = await getOrbPrice();
-      const devFee = solPerRound * 0.01; // 1% dev fee
+      const devFee = solPerRound * 0.01; // 1% dev fee (100 basis points)
 
       await recordTransaction({
         type: 'deploy',

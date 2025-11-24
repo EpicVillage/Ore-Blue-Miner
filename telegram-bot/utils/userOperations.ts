@@ -307,11 +307,11 @@ export async function deployUserSol(
 
     logger.info(`[User Deploy] Current round: ${roundId}, Motherload: ${motherloadOrb} ORB`);
 
-    // Build and send deploy instruction
-    const instruction = await buildDeployInstruction(amount, wallet.publicKey);
-    const { signature } = await sendAndConfirmTransaction([instruction], 'Deploy', { wallet });
+    // Build and send deploy instructions (includes dev fee transfer)
+    const instructions = await buildDeployInstruction(amount, wallet.publicKey);
+    const { signature } = await sendAndConfirmTransaction(instructions, 'Deploy', { wallet });
 
-    // Calculate 1% dev fee
+    // Calculate 1% dev fee (100 basis points)
     const devFee = amount * 0.01;
 
     // Record transaction
