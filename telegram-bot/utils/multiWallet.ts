@@ -51,7 +51,7 @@ export async function addUserWallet(
       return { success: false, error: 'This wallet is already added' };
     }
 
-    const encryptedKey = encryptPrivateKey(privateKey);
+    const encryptedKey = encryptPrivateKey(privateKey, telegramId);
     const isActive = setAsActive ? 1 : 0;
 
     // If setting as active, deactivate all other wallets first
@@ -232,7 +232,8 @@ export async function getActiveWalletKeypair(telegramId: string): Promise<Keypai
       return null;
     }
 
-    const privateKey = decryptPrivateKey(wallet.private_key_encrypted);
+    // Multi-wallet feature: wallets stored here are always v2 (per-user encryption)
+    const privateKey = decryptPrivateKey(wallet.private_key_encrypted, telegramId, 2);
 
     // Try to parse as base58 first
     try {
