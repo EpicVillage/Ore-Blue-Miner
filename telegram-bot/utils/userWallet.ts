@@ -25,17 +25,17 @@ export async function getUserWallet(telegramId: string): Promise<Keypair | null>
     // Support both base58 and array formats
     let secretKey: Uint8Array;
 
-    logger.debug(`[User Wallet] Decrypted key length: ${privateKey.length}, starts with '[': ${privateKey.startsWith('[')}`);
+    logger.info(`[User Wallet] Decrypted key length: ${privateKey.length}, starts with '[': ${privateKey.startsWith('[')}`);
 
     if (privateKey.startsWith('[')) {
       // Array format: [1,2,3,...]
       const numbers = JSON.parse(privateKey);
       secretKey = new Uint8Array(numbers);
-      logger.debug(`[User Wallet] Parsed array format, secretKey length: ${secretKey.length} bytes`);
+      logger.info(`[User Wallet] Parsed array format, secretKey length: ${secretKey.length} bytes`);
     } else {
       // Base58 format
       secretKey = bs58.decode(privateKey);
-      logger.debug(`[User Wallet] Decoded base58 format, secretKey length: ${secretKey.length} bytes`);
+      logger.info(`[User Wallet] Decoded base58 format, secretKey length: ${secretKey.length} bytes`);
     }
 
     if (secretKey.length !== 64) {
