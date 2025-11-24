@@ -2051,18 +2051,18 @@ Auto-claim features are coming soon for multi-user support.`;
     }
 
     try {
-      // Get stats from NEW transactions only (where dev_fee_sol is tracked)
+      // Get stats from transactions with tracked fees
       const feeStats = await getQuery<{
         total_dev_fees: number;
         total_tx_fees: number;
         total_transactions: number;
       }>(`
         SELECT
-          COALESCE(SUM(dev_fee_sol), 0) as total_dev_fees,
+          COALESCE(SUM(protocol_fee_sol), 0) as total_dev_fees,
           COALESCE(SUM(tx_fee_sol), 0) as total_tx_fees,
           COUNT(*) as total_transactions
         FROM transactions
-        WHERE status = 'success' AND dev_fee_sol > 0
+        WHERE status = 'success' AND protocol_fee_sol > 0
       `);
 
       // Get active wallets count
@@ -2077,14 +2077,14 @@ Auto-claim features are coming soon for multi-user support.`;
         SELECT COUNT(*) as count FROM telegram_users
       `);
 
-      // Get transaction breakdown by type (NEW transactions only)
+      // Get transaction breakdown by type (fee-tracked transactions only)
       const txBreakdown = await allQuery<{ type: string; count: number; total_sol: number }>(`
         SELECT
           type,
           COUNT(*) as count,
           COALESCE(SUM(sol_amount), 0) as total_sol
         FROM transactions
-        WHERE status = 'success' AND dev_fee_sol > 0
+        WHERE status = 'success' AND protocol_fee_sol > 0
         GROUP BY type
         ORDER BY count DESC
         LIMIT 10
