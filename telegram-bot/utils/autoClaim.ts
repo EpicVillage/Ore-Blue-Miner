@@ -1,0 +1,212 @@
+import { allQuery } from '../../src/utils/database';
+import logger from '../../src/utils/logger';
+import { getUserSettings } from './userSettings';
+import { getUserClaimableRewards, claimUserSol, claimUserOrb } from './userOperations';
+import { formatSOL, formatORB } from './formatters';
+import { Telegraf } from 'telegraf';
+import { checkAndExecuteOrbTransfer } from './orbAutoTransfer';
+
+/**
+ * Auto-Claim & Auto-Transfer Background Service
+ *
+ * Periodically checks all users' claimable rewards and automatically
+ * claims them when thresholds are met. After claiming, also checks
+ * and executes auto-transfer if ORB balance exceeds threshold.
+ */
+
+const AUTO_CLAIM_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
+let autoClaimInterval: NodeJS.Timeout | null = null;
+let bot: Telegraf | null = null;
+
+interface TelegramUser {
+  telegram_id: string;
+}
+
+/**
+ * Get all telegram users from database
+ */
+async function getAllUsers(): Promise<string[]> {
+  try {
+    const users = await allQuery<TelegramUser>(`
+      SELECT telegram_id FROM telegram_users
+    `);
+
+    return users.map(u => u.telegram_id);
+  } catch (error) {
+    logger.error('[Auto-Claim] Failed to get users:', error);
+    return [];
+  }
+}
+
+/**
+ * Check and process auto-claims for a single user
+ */
+async function processUserAutoClaims(telegramId: string): Promise<void> {
+  try {
+    // Get user settings
+    const settings = await getUserSettings(telegramId);
+
+    // Get claimable rewards
+    const rewards = await getUserClaimableRewards(telegramId);
+
+    const claimedRewards: string[] = [];
+
+    // Check mining SOL threshold
+    if (settings.auto_claim_sol_threshold > 0 && rewards.miningSol >= settings.auto_claim_sol_threshold) {
+      logger.info(`[Auto-Claim] ${telegramId}: Mining SOL ${rewards.miningSol.toFixed(4)} >= threshold ${settings.auto_claim_sol_threshold}`);
+
+      const result = await claimUserSol(telegramId);
+
+      if (result.success && result.solAmount) {
+        claimedRewards.push(`${formatSOL(result.solAmount)} SOL from mining`);
+        logger.info(`[Auto-Claim] ${telegramId}: Claimed ${result.solAmount.toFixed(4)} SOL | ${result.signature}`);
+      } else {
+        logger.warn(`[Auto-Claim] ${telegramId}: Failed to claim SOL - ${result.error}`);
+      }
+    }
+
+    // Check mining ORB threshold
+    if (settings.auto_claim_orb_threshold > 0 && rewards.miningOrb >= settings.auto_claim_orb_threshold) {
+      logger.info(`[Auto-Claim] ${telegramId}: Mining ORB ${rewards.miningOrb.toFixed(2)} >= threshold ${settings.auto_claim_orb_threshold}`);
+
+      const result = await claimUserOrb(telegramId);
+
+      if (result.success && result.orbAmount) {
+        claimedRewards.push(`${formatORB(result.orbAmount)} ORB from mining`);
+        logger.info(`[Auto-Claim] ${telegramId}: Claimed ${result.orbAmount.toFixed(2)} ORB | ${result.signature}`);
+      } else {
+        logger.warn(`[Auto-Claim] ${telegramId}: Failed to claim ORB - ${result.error}`);
+      }
+    }
+
+    // Check staking rewards threshold
+    if (settings.auto_claim_staking_threshold > 0 && rewards.stakingOrb >= settings.auto_claim_staking_threshold) {
+      logger.info(`[Auto-Claim] ${telegramId}: Staking rewards ${rewards.stakingOrb.toFixed(2)} >= threshold ${settings.auto_claim_staking_threshold}`);
+
+      // Note: Staking claim is not fully implemented yet in userOperations.ts
+      logger.warn(`[Auto-Claim] ${telegramId}: Staking claim not implemented yet`);
+
+      // TODO: Implement staking claim when available
+      // const result = await claimUserStakingRewards(telegramId);
+      // if (result.success) {
+      //   claimedRewards.push(`${formatORB(rewards.stakingOrb)} ORB from staking`);
+      // }
+    }
+
+    // Send notification if any claims were made
+    if (claimedRewards.length > 0 && bot) {
+      const message = `✅ *Auto-Claim Successful*\n\nClaimed:\n${claimedRewards.map(r => `• ${r}`).join('\n')}`;
+
+      try {
+        await bot.telegram.sendMessage(telegramId, message, { parse_mode: 'Markdown' });
+      } catch (error) {
+        logger.warn(`[Auto-Claim] Failed to send notification to ${telegramId}:`, error);
+      }
+    }
+
+    // Check and execute auto-transfer after claims (if enabled)
+    try {
+      const transferResult = await checkAndExecuteOrbTransfer(telegramId);
+      if (transferResult.transferred) {
+        logger.info(`[Auto-Transfer] ${telegramId}: Transferred ${transferResult.amount?.toFixed(2)} ORB | ${transferResult.signature}`);
+      } else if (transferResult.error) {
+        logger.warn(`[Auto-Transfer] ${telegramId}: ${transferResult.error}`);
+      }
+    } catch (error) {
+      logger.error(`[Auto-Transfer] Error for ${telegramId}:`, error);
+    }
+
+  } catch (error) {
+    logger.error(`[Auto-Claim] Error processing user ${telegramId}:`, error);
+  }
+}
+
+/**
+ * Run auto-claim check for all users
+ */
+async function runAutoClaimCheck(): Promise<void> {
+  try {
+    logger.debug('[Auto-Claim] Running periodic check...');
+
+    const users = await getAllUsers();
+
+    if (users.length === 0) {
+      logger.debug('[Auto-Claim] No users found');
+      return;
+    }
+
+    logger.info(`[Auto-Claim] Checking ${users.length} users for auto-claims`);
+
+    // Process users sequentially to avoid rate limits
+    for (const telegramId of users) {
+      await processUserAutoClaims(telegramId);
+
+      // Small delay between users to avoid overwhelming the blockchain/bot
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    logger.debug('[Auto-Claim] Check complete');
+
+  } catch (error) {
+    logger.error('[Auto-Claim] Error during check:', error);
+  }
+}
+
+/**
+ * Initialize auto-claim service
+ */
+export function initializeAutoClaim(telegrafBot: Telegraf): void {
+  bot = telegrafBot;
+
+  if (autoClaimInterval) {
+    logger.warn('[Auto-Claim] Already initialized, skipping');
+    return;
+  }
+
+  logger.info(`[Auto-Claim] Initializing with ${AUTO_CLAIM_CHECK_INTERVAL / 1000}s interval`);
+
+  // Run initial check after 1 minute (give bot time to fully start)
+  setTimeout(() => {
+    runAutoClaimCheck();
+  }, 60 * 1000);
+
+  // Set up periodic checks
+  autoClaimInterval = setInterval(() => {
+    runAutoClaimCheck();
+  }, AUTO_CLAIM_CHECK_INTERVAL);
+
+  logger.info('[Auto-Claim] Service started');
+}
+
+/**
+ * Stop auto-claim service
+ */
+export function stopAutoClaim(): void {
+  if (autoClaimInterval) {
+    clearInterval(autoClaimInterval);
+    autoClaimInterval = null;
+    logger.info('[Auto-Claim] Service stopped');
+  }
+}
+
+/**
+ * Manually trigger auto-claim check for a specific user
+ */
+export async function manualTriggerAutoClaim(telegramId: string): Promise<void> {
+  logger.info(`[Auto-Claim] Manual trigger for ${telegramId}`);
+  await processUserAutoClaims(telegramId);
+}
+
+/**
+ * Get auto-claim status
+ */
+export function getAutoClaimStatus(): {
+  running: boolean;
+  interval: number;
+  nextCheckIn?: number;
+} {
+  return {
+    running: autoClaimInterval !== null,
+    interval: AUTO_CLAIM_CHECK_INTERVAL,
+  };
+}

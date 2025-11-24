@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+wallets.json
+*.log
+*.db
+.DS_Store
+*.har
+data/
+logs/
+.claude/
