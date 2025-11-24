@@ -78,7 +78,7 @@ export const SETTING_CATEGORIES = {
         description: 'Min ORB to auto-claim',
         type: 'number' as const,
         min: 0,
-        max: 100,
+        max: 10000,
         unit: 'ORB',
       },
       {
@@ -133,8 +133,8 @@ export const SETTING_CATEGORIES = {
         name: 'Min Swap Amount',
         description: 'Minimum amount per swap',
         type: 'number' as const,
-        min: 0.01,
-        max: 10,
+        min: 1,
+        max: 10000,
         unit: 'ORB',
       },
       {
