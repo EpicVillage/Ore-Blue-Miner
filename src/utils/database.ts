@@ -149,6 +149,8 @@ async function createTables(): Promise<void> {
     `ALTER TABLE transactions ADD COLUMN protocol_fee_sol REAL DEFAULT 0`,
     `ALTER TABLE transactions ADD COLUMN wallet_balance_before REAL DEFAULT 0`,
     `ALTER TABLE transactions ADD COLUMN wallet_balance_after REAL DEFAULT 0`,
+    `ALTER TABLE transactions ADD COLUMN wallet_address TEXT`,
+    `ALTER TABLE transactions ADD COLUMN telegram_id TEXT`,
     `ALTER TABLE balances ADD COLUMN orb_price_usd REAL DEFAULT 0`,
   ];
 

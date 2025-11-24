@@ -7,6 +7,34 @@ import { formatORB, formatSOL, formatTimestamp } from './formatters';
  * Tracks participation in mining rounds
  */
 
+/**
+ * Initialize user_rounds table
+ */
+export async function initializeUserRoundsTable(): Promise<void> {
+  await runQuery(`
+    CREATE TABLE IF NOT EXISTS user_rounds (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      telegram_id TEXT NOT NULL,
+      round_id INTEGER NOT NULL,
+      timestamp INTEGER NOT NULL,
+      motherlode REAL DEFAULT 0,
+      deployed_sol REAL DEFAULT 0,
+      squares_deployed INTEGER DEFAULT 0,
+      won INTEGER DEFAULT 0,
+      rewards_claimed REAL DEFAULT 0,
+      orb_rewards REAL DEFAULT 0,
+      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
+      UNIQUE(telegram_id, round_id)
+    )
+  `);
+
+  // Create indexes for faster queries
+  await runQuery(`CREATE INDEX IF NOT EXISTS idx_user_rounds_telegram_id ON user_rounds(telegram_id)`);
+  await runQuery(`CREATE INDEX IF NOT EXISTS idx_user_rounds_round_id ON user_rounds(round_id)`);
+
+  logger.info('[Telegram DB] User rounds table initialized');
+}
+
 export interface UserRound {
   id: number;
   telegram_id: string;

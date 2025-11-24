@@ -6,6 +6,39 @@ import logger from '../../src/utils/logger';
  * Each user can configure their own mining, automation, and safety parameters
  */
 
+/**
+ * Initialize user_settings table
+ */
+export async function initializeUserSettingsTable(): Promise<void> {
+  await runQuery(`
+    CREATE TABLE IF NOT EXISTS user_settings (
+      telegram_id TEXT PRIMARY KEY,
+      motherload_threshold REAL DEFAULT 5000,
+      sol_per_block REAL DEFAULT 0.001,
+      num_blocks INTEGER DEFAULT 10,
+      automation_budget_percent REAL DEFAULT 50,
+      auto_claim_sol_threshold REAL DEFAULT 0.01,
+      auto_claim_orb_threshold REAL DEFAULT 1,
+      auto_claim_staking_threshold REAL DEFAULT 1,
+      auto_swap_enabled INTEGER DEFAULT 0,
+      swap_threshold REAL DEFAULT 100,
+      min_orb_price REAL DEFAULT 0,
+      min_orb_to_keep REAL DEFAULT 10,
+      min_swap_amount REAL DEFAULT 10,
+      slippage_bps INTEGER DEFAULT 300,
+      auto_stake_enabled INTEGER DEFAULT 0,
+      stake_threshold REAL DEFAULT 50,
+      auto_transfer_enabled INTEGER DEFAULT 0,
+      orb_transfer_threshold REAL DEFAULT 100,
+      transfer_recipient_address TEXT,
+      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
+      updated_at INTEGER DEFAULT (strftime('%s', 'now') * 1000)
+    )
+  `);
+
+  logger.info('[Telegram DB] User settings table initialized');
+}
+
 export interface UserSettings {
   telegram_id: string;
   motherload_threshold: number;

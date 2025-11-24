@@ -1,4 +1,4 @@
-import { getQuery, allQuery } from '../../src/utils/database';
+import { runQuery, getQuery, allQuery } from '../../src/utils/database';
 import logger from '../../src/utils/logger';
 import { formatSOL, formatORB, formatUSD, formatPercent } from './formatters';
 
@@ -6,6 +6,34 @@ import { formatSOL, formatORB, formatUSD, formatPercent } from './formatters';
  * User-specific PnL calculation and tracking
  * Calculates profit/loss for individual telegram users
  */
+
+/**
+ * Initialize user_balance_history table
+ */
+export async function initializeUserBalanceHistoryTable(): Promise<void> {
+  await runQuery(`
+    CREATE TABLE IF NOT EXISTS user_balance_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      telegram_id TEXT NOT NULL,
+      timestamp INTEGER NOT NULL,
+      sol_balance REAL DEFAULT 0,
+      orb_balance REAL DEFAULT 0,
+      orb_price_usd REAL DEFAULT 0,
+      portfolio_value_usd REAL DEFAULT 0,
+      automation_sol REAL DEFAULT 0,
+      claimable_sol REAL DEFAULT 0,
+      claimable_orb REAL DEFAULT 0,
+      staked_orb REAL DEFAULT 0,
+      created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000)
+    )
+  `);
+
+  // Create index for faster queries
+  await runQuery(`CREATE INDEX IF NOT EXISTS idx_user_balance_history_telegram_id ON user_balance_history(telegram_id)`);
+  await runQuery(`CREATE INDEX IF NOT EXISTS idx_user_balance_history_timestamp ON user_balance_history(timestamp)`);
+
+  logger.info('[Telegram DB] User balance history table initialized');
+}
 
 export interface UserPnLSummary {
   // Income (what you earned)

@@ -16,6 +16,9 @@ import {
   updateLastActive,
   deleteUser
 } from './utils/userDatabase';
+import { initializeUserSettingsTable } from './utils/userSettings';
+import { initializeUserRoundsTable } from './utils/userRounds';
+import { initializeUserBalanceHistoryTable } from './utils/userPnL';
 import {
   getUserBalances,
   validatePrivateKey,
@@ -2274,9 +2277,12 @@ Transfers happen automatically when your ORB balance reaches the threshold.
    */
   async start() {
     try {
-      // Initialize telegram users table
+      // Initialize telegram users tables
       await initializeTelegramUsersTable();
-      logger.info('[Telegram] User database initialized');
+      await initializeUserSettingsTable();
+      await initializeUserRoundsTable();
+      await initializeUserBalanceHistoryTable();
+      logger.info('[Telegram] User database tables initialized');
 
       // Initialize notifications system
       initializeNotifications(this.bot);
