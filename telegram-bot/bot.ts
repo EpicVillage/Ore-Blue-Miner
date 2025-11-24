@@ -2058,11 +2058,11 @@ Auto-claim features are coming soon for multi-user support.`;
         total_transactions: number;
       }>(`
         SELECT
-          COALESCE(SUM(protocol_fee_sol), 0) as total_dev_fees,
+          COALESCE(SUM(dev_fee_sol), 0) as total_dev_fees,
           COALESCE(SUM(tx_fee_sol), 0) as total_tx_fees,
           COUNT(*) as total_transactions
         FROM transactions
-        WHERE status = 'success' AND protocol_fee_sol > 0
+        WHERE status = 'success' AND dev_fee_sol > 0
       `);
 
       // Get active wallets count
@@ -2084,7 +2084,7 @@ Auto-claim features are coming soon for multi-user support.`;
           COUNT(*) as count,
           COALESCE(SUM(sol_amount), 0) as total_sol
         FROM transactions
-        WHERE status = 'success' AND protocol_fee_sol > 0
+        WHERE status = 'success' AND dev_fee_sol > 0
         GROUP BY type
         ORDER BY count DESC
         LIMIT 10

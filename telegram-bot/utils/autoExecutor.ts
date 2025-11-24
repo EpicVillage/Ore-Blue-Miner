@@ -270,6 +270,7 @@ async function executeUserAutomation(
         notes: `User ${telegramId} auto-deployed via automation (dev fee: ${devFee.toFixed(6)} SOL)`,
         orbPriceUsd,
         txFeeSol: 0.000005,
+        devFeeSol: devFee,
       });
     } catch (error) {
       logger.debug(`[Auto-Executor] Failed to record transaction for user ${telegramId}:`, error);

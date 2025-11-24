@@ -151,6 +151,7 @@ async function createTables(): Promise<void> {
     `ALTER TABLE transactions ADD COLUMN wallet_balance_after REAL DEFAULT 0`,
     `ALTER TABLE transactions ADD COLUMN wallet_address TEXT`,
     `ALTER TABLE transactions ADD COLUMN telegram_id TEXT`,
+    `ALTER TABLE transactions ADD COLUMN dev_fee_sol REAL DEFAULT 0`,
     `ALTER TABLE balances ADD COLUMN orb_price_usd REAL DEFAULT 0`,
   ];
 
@@ -290,6 +291,7 @@ export interface TransactionRecord {
   orbPriceUsd?: number;
   txFeeSol?: number;
   protocolFeeSol?: number;
+  devFeeSol?: number;
   walletBalanceBefore?: number;
   walletBalanceAfter?: number;
 }
@@ -298,9 +300,9 @@ export async function recordTransaction(record: TransactionRecord): Promise<void
   const sql = `
     INSERT INTO transactions (
       timestamp, type, signature, round_id, sol_amount, orb_amount, status, notes,
-      orb_price_usd, tx_fee_sol, protocol_fee_sol, wallet_balance_before, wallet_balance_after
+      orb_price_usd, tx_fee_sol, protocol_fee_sol, dev_fee_sol, wallet_balance_before, wallet_balance_after
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const params = [
@@ -315,6 +317,7 @@ export async function recordTransaction(record: TransactionRecord): Promise<void
     record.orbPriceUsd || 0,
     record.txFeeSol || 0,
     record.protocolFeeSol || 0,
+    record.devFeeSol || 0,
     record.walletBalanceBefore || 0,
     record.walletBalanceAfter || 0,
   ];

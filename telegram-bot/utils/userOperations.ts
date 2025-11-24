@@ -339,6 +339,7 @@ export async function deployUserSol(
       status: 'success',
       notes: `Deployed ${amount.toFixed(4)} SOL to round ${roundId} for user ${telegramId} (dev fee: ${devFee.toFixed(6)} SOL)`,
       txFeeSol: 0.000005,
+      devFeeSol: devFee,
     });
 
     // Record user round participation
