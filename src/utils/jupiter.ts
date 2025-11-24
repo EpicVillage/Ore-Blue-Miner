@@ -325,9 +325,9 @@ export async function getSwapQuote(
 }
 
 // Execute swap transaction
-export async function executeSwap(quote: JupiterQuote): Promise<string | null> {
+export async function executeSwap(quote: JupiterQuote, walletKeypair?: any): Promise<string | null> {
   try {
-    const wallet = getWallet();
+    const wallet = walletKeypair || getWallet();
     const connection = getConnection();
 
     // Use working endpoint if available, otherwise use config
@@ -432,7 +432,8 @@ export async function executeSwap(quote: JupiterQuote): Promise<string | null> {
 // Swap ORB to SOL (convenience function)
 export async function swapOrbToSol(
   orbAmount: number,
-  slippageBps?: number
+  slippageBps?: number,
+  walletKeypair?: any
 ): Promise<{ success: boolean; signature?: string; solReceived?: number }> {
   try {
     logger.info(`Swapping ${orbAmount} ORB to SOL...`);
@@ -447,7 +448,7 @@ export async function swapOrbToSol(
     logger.info(`Expected to receive: ${expectedSol} SOL`);
 
     // Execute swap
-    const signature = await executeSwap(quote);
+    const signature = await executeSwap(quote, walletKeypair);
     if (!signature) {
       return { success: false };
     }

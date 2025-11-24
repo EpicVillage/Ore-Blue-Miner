@@ -254,8 +254,8 @@ export async function swapUserOrbToSol(
     const expectedSol = Number(quote.outAmount) / 1e9;
     logger.info(`[User Swap] Expected output: ${expectedSol.toFixed(4)} SOL`);
 
-    // Execute swap
-    const result = await swapOrbToSol(amount, settings.slippage_bps);
+    // Execute swap with user's wallet
+    const result = await swapOrbToSol(amount, settings.slippage_bps, wallet);
 
     if (result.success) {
       // Record transaction
