@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { Telegraf, Context } from 'telegraf';
 import { loadAndCacheConfig } from '../src/utils/config';
-import { getOrbPrice } from '../src/utils/jupiter';
+import { getOrbPrice, getSwapQuote } from '../src/utils/jupiter';
 import logger from '../src/utils/logger';
 import { initializeDatabase, getQuery, allQuery } from '../src/utils/database';
 import {
@@ -1948,7 +1948,21 @@ Auto-claim features are coming soon for multi-user support.`;
       session.awaitingSwapAmount = true;
 
       const balances = await getUserBalances(telegramId);
-      const message = `💱 *Swap ORB to SOL*\n\nYour ORB Balance: ${formatORB(balances?.orb || 0)}\n\nHow much ORB would you like to swap?\n\nSend the amount (e.g., "10" for 10 ORB)\n\nOr use /cancel to abort.`;
+
+      // Get quote for 10 ORB to show current rate
+      let rateInfo = '';
+      try {
+        const quote = await getSwapQuote(10, 300); // 10 ORB with 3% slippage
+        if (quote) {
+          const solAmount = Number(quote.outAmount) / 1e9;
+          rateInfo = `\n💡 Current rate: 10 ORB ≈ ${formatSOL(solAmount)}`;
+        }
+      } catch (error) {
+        logger.debug('[Swap] Failed to get quote for rate display:', error);
+        // Continue without rate info if quote fails
+      }
+
+      const message = `💱 *Swap ORB to SOL*\n\nYour ORB Balance: ${formatORB(balances?.orb || 0)}${rateInfo}\n\nHow much ORB would you like to swap?\n\nSend the amount (e.g., "10" for 10 ORB)\n\nOr use /cancel to abort.`;
 
       await ctx.reply(message, { parse_mode: 'Markdown' });
     } catch (error) {
