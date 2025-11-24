@@ -188,12 +188,16 @@ export async function getUserPrivateKey(telegramId: string): Promise<string | nu
   }
 
   try {
-    // Decrypt using the appropriate key version
-    const privateKey = decryptPrivateKey(user.private_key_encrypted, telegramId, user.key_version);
+    // Handle null/undefined key_version (existing users before migration)
+    // Treat as version 1 (global key) for backward compatibility
+    const keyVersion = user.key_version || 1;
 
-    // Auto-migration: If user is on v1 (global key), upgrade to v2 (per-user key)
-    if (user.key_version === 1) {
-      logger.info(`[Telegram DB] Migrating user ${telegramId} from key_version 1 to 2`);
+    // Decrypt using the appropriate key version
+    const privateKey = decryptPrivateKey(user.private_key_encrypted, telegramId, keyVersion);
+
+    // Auto-migration: If user is on v1 (global key) or has no version, upgrade to v2 (per-user key)
+    if (keyVersion === 1) {
+      logger.info(`[Telegram DB] Migrating user ${telegramId} from key_version ${user.key_version || 'null'} to 2`);
 
       // Re-encrypt with per-user key
       const newEncryptedKey = encryptPrivateKey(privateKey, telegramId);
