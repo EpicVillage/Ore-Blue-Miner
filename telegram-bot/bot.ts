@@ -88,6 +88,14 @@ import {
   stopAutoClaim
 } from './utils/autoClaim';
 import {
+  initializeAutoSwap,
+  stopAutoSwap
+} from './utils/autoSwap';
+import {
+  initializeAutoStake,
+  stopAutoStake
+} from './utils/autoStake';
+import {
   initializeAutoExecutor,
   stopAutoExecutor
 } from './utils/autoExecutor';
@@ -2306,6 +2314,14 @@ Transfers happen automatically when your ORB balance reaches the threshold.
       initializeAutoClaim(this.bot);
       logger.info('[Telegram] Auto-claim service initialized');
 
+      // Initialize auto-swap service
+      initializeAutoSwap(this.bot);
+      logger.info('[Telegram] Auto-swap service initialized');
+
+      // Initialize auto-stake service
+      initializeAutoStake(this.bot);
+      logger.info('[Telegram] Auto-stake service initialized');
+
       // Initialize automation executor service
       initializeAutoExecutor();
       logger.info('[Telegram] Automation executor service initialized');
@@ -2333,6 +2349,14 @@ Transfers happen automatically when your ORB balance reaches the threshold.
     // Stop auto-claim service
     stopAutoClaim();
     logger.info('[Telegram] Auto-claim service stopped');
+
+    // Stop auto-swap service
+    stopAutoSwap();
+    logger.info('[Telegram] Auto-swap service stopped');
+
+    // Stop auto-stake service
+    stopAutoStake();
+    logger.info('[Telegram] Auto-stake service stopped');
 
     // Stop automation executor service
     stopAutoExecutor();

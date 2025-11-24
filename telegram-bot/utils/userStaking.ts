@@ -4,7 +4,9 @@ import { getUserWallet } from './userWallet';
 import { getConnection } from '../../src/utils/solana';
 import { fetchStake } from '../../src/utils/accounts';
 import { formatORB, formatSOL } from './formatters';
-import { PublicKey } from '@solana/web3.js';
+import { PublicKey, Transaction } from '@solana/web3.js';
+import { buildStakeInstruction, buildClaimYieldInstruction, sendAndConfirmTransaction } from '../../src/utils/program';
+import { getUserBalances } from './userWallet';
 
 /**
  * User-specific staking operations for telegram bot users
@@ -80,8 +82,7 @@ export async function updateUserStakingInfo(
  */
 export async function stakeUserOrb(
   telegramId: string,
-  amount: number,
-  dryRun: boolean = false
+  amount: number
 ): Promise<{ success: boolean; signature?: string; error?: string }> {
   try {
     const wallet = await getUserWallet(telegramId);
@@ -89,19 +90,27 @@ export async function stakeUserOrb(
       return { success: false, error: 'Wallet not found' };
     }
 
-    const connection = getConnection();
-    // const stakingProgram = getStakingProgram(wallet); // TODO: implement when needed
-
-    if (dryRun) {
-      logger.info(`[User Staking] DRY RUN: Would stake ${amount} ORB for ${telegramId}`);
-      return { success: true, signature: 'DRY_RUN' };
+    // Validate amount
+    if (amount <= 0) {
+      return { success: false, error: 'Stake amount must be greater than 0' };
     }
 
-    // Execute staking transaction
-    // TODO: Implement actual staking logic based on your program
+    // Check ORB balance
+    const balances = await getUserBalances(telegramId);
+    if (!balances || balances.orb < amount) {
+      return {
+        success: false,
+        error: `Insufficient ORB balance. Need ${amount} ORB, have ${balances?.orb.toFixed(2) || 0} ORB`
+      };
+    }
+
     logger.info(`[User Staking] Staking ${amount} ORB for ${telegramId}`);
 
-    // For now, just update the database record
+    // Build and send stake instruction
+    const instruction = buildStakeInstruction(amount, wallet.publicKey);
+    const { signature } = await sendAndConfirmTransaction([instruction], 'Stake', { wallet });
+
+    // Update database with new staked amount
     const currentInfo = await getUserStakingInfo(telegramId);
     const newStakedAmount = (currentInfo?.staked_amount || 0) + amount;
     await updateUserStakingInfo(telegramId, newStakedAmount, currentInfo?.accrued_rewards || 0);
@@ -109,12 +118,15 @@ export async function stakeUserOrb(
     // Record transaction
     await recordTransaction({
       type: 'stake',
+      signature,
       orbAmount: amount,
       status: 'success',
       notes: `Staked ${amount} ORB for user ${telegramId}`,
     });
 
-    return { success: true, signature: 'MOCK_SIGNATURE' };
+    logger.info(`[User Staking] Successfully staked ${amount} ORB | ${signature}`);
+
+    return { success: true, signature };
   } catch (error: any) {
     logger.error('[User Staking] Failed to stake ORB:', error);
     return { success: false, error: error.message };
@@ -125,8 +137,7 @@ export async function stakeUserOrb(
  * Claim staking rewards for a user
  */
 export async function claimUserStakingRewards(
-  telegramId: string,
-  dryRun: boolean = false
+  telegramId: string
 ): Promise<{ success: boolean; amount?: number; signature?: string; error?: string }> {
   try {
     const wallet = await getUserWallet(telegramId);
@@ -139,19 +150,13 @@ export async function claimUserStakingRewards(
       return { success: false, error: 'No rewards to claim' };
     }
 
-    const connection = getConnection();
-    // const stakingProgram = getStakingProgram(wallet); // TODO: implement when needed
-
-    if (dryRun) {
-      logger.info(`[User Staking] DRY RUN: Would claim ${stakingInfo.accrued_rewards} ORB rewards for ${telegramId}`);
-      return { success: true, amount: stakingInfo.accrued_rewards, signature: 'DRY_RUN' };
-    }
-
-    // Execute claim transaction
-    // TODO: Implement actual claiming logic based on your program
-    logger.info(`[User Staking] Claiming ${stakingInfo.accrued_rewards} ORB rewards for ${telegramId}`);
-
     const claimedAmount = stakingInfo.accrued_rewards;
+
+    logger.info(`[User Staking] Claiming ${claimedAmount} ORB staking rewards for ${telegramId}`);
+
+    // Build and send claim yield instruction
+    const instruction = await buildClaimYieldInstruction(claimedAmount, wallet.publicKey);
+    const { signature } = await sendAndConfirmTransaction([instruction], 'Claim Staking Rewards', { wallet });
 
     // Update staking info (reset rewards)
     await updateUserStakingInfo(telegramId, stakingInfo.staked_amount, 0);
@@ -159,12 +164,15 @@ export async function claimUserStakingRewards(
     // Record transaction
     await recordTransaction({
       type: 'claim_orb',
+      signature,
       orbAmount: claimedAmount,
       status: 'success',
       notes: `Claimed ${claimedAmount} ORB staking rewards for user ${telegramId}`,
     });
 
-    return { success: true, amount: claimedAmount, signature: 'MOCK_SIGNATURE' };
+    logger.info(`[User Staking] Successfully claimed ${claimedAmount} ORB staking rewards | ${signature}`);
+
+    return { success: true, amount: claimedAmount, signature };
   } catch (error: any) {
     logger.error('[User Staking] Failed to claim rewards:', error);
     return { success: false, error: error.message };

@@ -155,36 +155,20 @@ export async function claimUserStakingRewards(
   telegramId: string
 ): Promise<ClaimResult> {
   try {
-    const wallet = await getUserWallet(telegramId);
-    if (!wallet) {
-      return { success: false, error: 'Wallet not found' };
+    // Use the real implementation from userStaking
+    const { claimUserStakingRewards: claimStaking } = await import('./userStaking');
+    const result = await claimStaking(telegramId);
+
+    if (result.success && result.amount) {
+      return {
+        success: true,
+        orbAmount: result.amount,
+        solAmount: 0, // Staking rewards are ORB only
+        signature: result.signature
+      };
     }
 
-    const settings = await getUserSettings(telegramId);
-
-    logger.info(`[User Claim] Claiming staking rewards for ${telegramId}`);
-
-    // Fetch stake account for staking rewards
-    const stake = await fetchStake(wallet.publicKey);
-
-    if (!stake) {
-      return { success: false, error: 'No stake account found' };
-    }
-
-    const stakingSol = Number(stake.rewardsSol) / 1e9;
-    const stakingOrb = Number(stake.rewardsOre) / 1e9;
-
-    if (stakingSol === 0 && stakingOrb === 0) {
-      return { success: false, error: 'No staking rewards to claim' };
-    }
-
-    logger.info(`[User Claim] Staking Rewards: ${stakingSol.toFixed(4)} SOL, ${stakingOrb.toFixed(2)} ORB`);
-
-    // TODO: Implement actual staking claim instructions
-    // For now, return a placeholder
-    logger.warn('[User Claim] Staking claim instructions not implemented yet');
-    return { success: false, error: 'Staking claim not implemented yet' };
-
+    return { success: false, error: result.error };
   } catch (error: any) {
     logger.error('[User Claim] Failed to claim staking rewards:', error);
     return { success: false, error: error.message };

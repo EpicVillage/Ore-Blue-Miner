@@ -2,6 +2,7 @@ import { allQuery } from '../../src/utils/database';
 import logger from '../../src/utils/logger';
 import { getUserSettings } from './userSettings';
 import { getUserClaimableRewards, claimUserSol, claimUserOrb } from './userOperations';
+import { claimUserStakingRewards } from './userStaking';
 import { formatSOL, formatORB } from './formatters';
 import { Telegraf } from 'telegraf';
 import { checkAndExecuteOrbTransfer } from './orbAutoTransfer';
@@ -83,14 +84,14 @@ async function processUserAutoClaims(telegramId: string): Promise<void> {
     if (settings.auto_claim_staking_threshold > 0 && rewards.stakingOrb >= settings.auto_claim_staking_threshold) {
       logger.info(`[Auto-Claim] ${telegramId}: Staking rewards ${rewards.stakingOrb.toFixed(2)} >= threshold ${settings.auto_claim_staking_threshold}`);
 
-      // Note: Staking claim is not fully implemented yet in userOperations.ts
-      logger.warn(`[Auto-Claim] ${telegramId}: Staking claim not implemented yet`);
+      const result = await claimUserStakingRewards(telegramId);
 
-      // TODO: Implement staking claim when available
-      // const result = await claimUserStakingRewards(telegramId);
-      // if (result.success) {
-      //   claimedRewards.push(`${formatORB(rewards.stakingOrb)} ORB from staking`);
-      // }
+      if (result.success && result.amount) {
+        claimedRewards.push(`${formatORB(result.amount)} ORB from staking`);
+        logger.info(`[Auto-Claim] ${telegramId}: Claimed ${result.amount.toFixed(2)} ORB staking rewards | ${result.signature}`);
+      } else {
+        logger.warn(`[Auto-Claim] ${telegramId}: Failed to claim staking rewards - ${result.error}`);
+      }
     }
 
     // Send notification if any claims were made
