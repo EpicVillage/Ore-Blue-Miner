@@ -136,12 +136,14 @@ export function buildAutomateInstruction(
   feePerExecution: number,  // Fee paid to executor per round (in SOL)
   strategy: AutomationStrategy = AutomationStrategy.Random,
   squareMask: bigint = BigInt(25), // For Random: number of squares (25). For Preferred: bitmask of squares
-  executor?: PublicKey      // Executor address (defaults to wallet for self-execution)
+  executor?: PublicKey,     // Executor address (defaults to wallet for self-execution)
+  walletPublicKey?: PublicKey  // Optional wallet public key (for multi-user support)
 ): TransactionInstruction {
-  const wallet = getWallet();
-  const [minerPDA] = getMinerPDA(wallet.publicKey);
-  const [automationPDA] = getAutomationPDA(wallet.publicKey);
-  const executorKey = executor || wallet.publicKey; // Self-execute if no executor provided
+  // Use provided wallet public key or fall back to global wallet
+  const signerPublicKey = walletPublicKey || getWallet().publicKey;
+  const [minerPDA] = getMinerPDA(signerPublicKey);
+  const [automationPDA] = getAutomationPDA(signerPublicKey);
+  const executorKey = executor || signerPublicKey; // Self-execute if no executor provided
 
   // Build instruction data (34 bytes total):
   // - 1 byte: discriminator (0x00)
@@ -186,7 +188,7 @@ export function buildAutomateInstruction(
   // 3. miner - Miner PDA (writable)
   // 4. system_program - System program (read-only)
   const keys = [
-    { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+    { pubkey: signerPublicKey, isSigner: true, isWritable: true },
     { pubkey: automationPDA, isSigner: false, isWritable: true },
     { pubkey: executorKey, isSigner: false, isWritable: true },
     { pubkey: minerPDA, isSigner: false, isWritable: true },

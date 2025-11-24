@@ -217,7 +217,8 @@ export async function createUserAutomation(userWallet: Keypair, telegramId: stri
       feePerExecution,
       strategy,
       squareMask,
-      userWallet.publicKey   // executor parameter (self-execute)
+      userWallet.publicKey,   // executor parameter (self-execute)
+      userWallet.publicKey    // walletPublicKey parameter (for multi-user support)
     );
 
     // Build and send transaction
