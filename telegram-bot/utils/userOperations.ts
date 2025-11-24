@@ -74,8 +74,8 @@ export async function claimUserSol(
     logger.info(`[User Claim] Mining Rewards: ${miningSol.toFixed(4)} SOL`);
 
     // Build and send claim instruction
-    const instruction = buildClaimSolInstruction();
-    const { signature } = await sendAndConfirmTransaction([instruction], 'Claim SOL');
+    const instruction = buildClaimSolInstruction(wallet.publicKey);
+    const { signature } = await sendAndConfirmTransaction([instruction], 'Claim SOL', { wallet });
 
     // Record transaction
     await recordTransaction({
@@ -127,8 +127,8 @@ export async function claimUserOrb(
     logger.info(`[User Claim] Mining Rewards: ${miningOrb.toFixed(2)} ORB`);
 
     // Build and send claim instruction
-    const instruction = await buildClaimOreInstruction();
-    const { signature } = await sendAndConfirmTransaction([instruction], 'Claim ORB');
+    const instruction = await buildClaimOreInstruction(wallet.publicKey);
+    const { signature } = await sendAndConfirmTransaction([instruction], 'Claim ORB', { wallet });
 
     // Record transaction
     await recordTransaction({
@@ -324,8 +324,8 @@ export async function deployUserSol(
     logger.info(`[User Deploy] Current round: ${roundId}, Motherload: ${motherloadOrb} ORB`);
 
     // Build and send deploy instruction
-    const instruction = await buildDeployInstruction(amount);
-    const { signature } = await sendAndConfirmTransaction([instruction], 'Deploy');
+    const instruction = await buildDeployInstruction(amount, wallet.publicKey);
+    const { signature } = await sendAndConfirmTransaction([instruction], 'Deploy', { wallet });
 
     // Calculate 1% dev fee
     const devFee = amount * 0.01;

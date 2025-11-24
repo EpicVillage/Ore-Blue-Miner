@@ -212,7 +212,7 @@ async function executeUserAutomation(
       logger.info(`[Auto-Executor] User ${telegramId}: Checkpointing ${roundsBehind} round(s)...`);
 
       try {
-        const checkpointIx = await buildCheckpointInstruction();
+        const checkpointIx = await buildCheckpointInstruction(undefined, userPublicKey);
         const tx = new Transaction().add(checkpointIx);
         tx.feePayer = userPublicKey;
         tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
@@ -237,7 +237,7 @@ async function executeUserAutomation(
     // Build execute automation instruction
     logger.info(`[Auto-Executor] User ${telegramId}: Executing automation for round ${board.roundId.toString()}...`);
 
-    const executeInstructions = await buildExecuteAutomationInstruction();
+    const executeInstructions = await buildExecuteAutomationInstruction(userPublicKey);
     const tx = new Transaction();
 
     for (const ix of executeInstructions) {

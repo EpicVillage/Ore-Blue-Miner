@@ -4,6 +4,7 @@ import {
   Transaction,
   LAMPORTS_PER_SOL,
   PublicKey,
+  Keypair,
 } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from '@solana/spl-token';
 import BN from 'bn.js';
@@ -42,11 +43,11 @@ export function getSquareMask(): number {
 
 // Build development fee transfer instruction (0.5% of deployment amount)
 // Returns null if the wallet is the dev fee wallet (no self-payment)
-export function buildDevFeeTransferInstruction(deploymentAmount: number): TransactionInstruction | null {
-  const wallet = getWallet();
+export function buildDevFeeTransferInstruction(deploymentAmount: number, walletPublicKey?: PublicKey): TransactionInstruction | null {
+  const signerPublicKey = walletPublicKey || getWallet().publicKey;
 
   // Skip dev fee if the wallet IS the dev fee wallet (no self-payment)
-  if (wallet.publicKey.equals(DEV_FEE_WALLET)) {
+  if (signerPublicKey.equals(DEV_FEE_WALLET)) {
     logger.debug('Skipping dev fee (wallet is dev fee wallet)');
     return null;
   }
@@ -57,7 +58,7 @@ export function buildDevFeeTransferInstruction(deploymentAmount: number): Transa
   logger.debug(`Dev fee: ${feeLamports} lamports (${feeLamports / LAMPORTS_PER_SOL} SOL) for ${deploymentAmount} SOL deployment`);
 
   return SystemProgram.transfer({
-    fromPubkey: wallet.publicKey,
+    fromPubkey: signerPublicKey,
     toPubkey: DEV_FEE_WALLET,
     lamports: feeLamports,
   });
@@ -65,11 +66,12 @@ export function buildDevFeeTransferInstruction(deploymentAmount: number): Transa
 
 // Build Deploy instruction (reverse engineered from ORB transactions)
 export async function buildDeployInstruction(
-  amount: number
+  amount: number,
+  walletPublicKey?: PublicKey
 ): Promise<TransactionInstruction> {
-  const wallet = getWallet();
-  const [minerPDA] = getMinerPDA(wallet.publicKey);
-  const [automationPDA] = getAutomationPDA(wallet.publicKey);
+  const signerPublicKey = walletPublicKey || getWallet().publicKey;
+  const [minerPDA] = getMinerPDA(signerPublicKey);
+  const [automationPDA] = getAutomationPDA(signerPublicKey);
   const [boardPDA] = getBoardPDA();
 
   // Get current board to get round info
@@ -111,8 +113,8 @@ export async function buildDeployInstruction(
   // 6. treasury - Treasury PDA (writable) - for automation fee collection
   // 7. system_program - System program (read-only)
   const keys = [
-    { pubkey: wallet.publicKey, isSigner: true, isWritable: true },  // signer
-    { pubkey: wallet.publicKey, isSigner: false, isWritable: true }, // authority
+    { pubkey: signerPublicKey, isSigner: true, isWritable: true },  // signer
+    { pubkey: signerPublicKey, isSigner: false, isWritable: true }, // authority
     { pubkey: automationPDA, isSigner: false, isWritable: true },    // automation
     { pubkey: boardPDA, isSigner: false, isWritable: true },         // board
     { pubkey: minerPDA, isSigner: false, isWritable: true },         // miner
@@ -204,11 +206,11 @@ export function buildAutomateInstruction(
 
 // Build Checkpoint instruction (process miner rewards for completed round)
 // Based on ORE checkpoint.rs: https://github.com/regolith-labs/ore/blob/master/program/src/checkpoint.rs
-export async function buildCheckpointInstruction(roundId?: BN): Promise<TransactionInstruction> {
+export async function buildCheckpointInstruction(roundId?: BN, walletPublicKey?: PublicKey): Promise<TransactionInstruction> {
   const connection = getConnection();
-  const wallet = getWallet();
+  const signerPublicKey = walletPublicKey || getWallet().publicKey;
   const [boardPDA] = getBoardPDA();
-  const [minerPDA] = getMinerPDA(wallet.publicKey);
+  const [minerPDA] = getMinerPDA(signerPublicKey);
 
   // Get current board and miner to determine which round to checkpoint
   const { fetchBoard, getTreasuryPDA } = await import('./accounts');
@@ -250,7 +252,7 @@ export async function buildCheckpointInstruction(roundId?: BN): Promise<Transact
   // 4. treasury (treasury PDA, writable)
   // 5. system_program (read-only)
   const keys = [
-    { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+    { pubkey: signerPublicKey, isSigner: true, isWritable: true },
     { pubkey: boardPDA, isSigner: false, isWritable: true },
     { pubkey: minerPDA, isSigner: false, isWritable: true },
     { pubkey: roundPDA, isSigner: false, isWritable: true },
@@ -269,12 +271,12 @@ export async function buildCheckpointInstruction(roundId?: BN): Promise<Transact
 // Based on reverse engineering real ORB transactions
 // Uses discriminator 0x06 (not deploy discriminator)
 // Returns both the deploy instruction and fee transfer instruction
-export async function buildExecuteAutomationInstruction(): Promise<TransactionInstruction[]> {
+export async function buildExecuteAutomationInstruction(walletPublicKey?: PublicKey): Promise<TransactionInstruction[]> {
   const connection = getConnection();
-  const wallet = getWallet();
-  const [automationPDA] = getAutomationPDA(wallet.publicKey);
+  const signerPublicKey = walletPublicKey || getWallet().publicKey;
+  const [automationPDA] = getAutomationPDA(signerPublicKey);
   const [boardPDA] = getBoardPDA();
-  const [minerPDA] = getMinerPDA(wallet.publicKey);
+  const [minerPDA] = getMinerPDA(signerPublicKey);
 
   // Get current round
   const { fetchBoard } = await import('./accounts');
@@ -294,7 +296,7 @@ export async function buildExecuteAutomationInstruction(): Promise<TransactionIn
   const mask = automationAccount.data.readBigUInt64LE(104);
 
   logger.debug(`Execute automation PDAs:`);
-  logger.debug(`  Executor/Authority: ${wallet.publicKey.toBase58()}`);
+  logger.debug(`  Executor/Authority: ${signerPublicKey.toBase58()}`);
   logger.debug(`  Automation: ${automationPDA.toBase58()}`);
   logger.debug(`  Board: ${boardPDA.toBase58()}`);
   logger.debug(`  Miner: ${minerPDA.toBase58()}`);
@@ -329,8 +331,8 @@ export async function buildExecuteAutomationInstruction(): Promise<TransactionIn
   // 5. round PDA
   // 6. system program
   const keys = [
-    { pubkey: wallet.publicKey, isSigner: true, isWritable: true },          // signer (executor)
-    { pubkey: wallet.publicKey, isSigner: false, isWritable: true },         // authority
+    { pubkey: signerPublicKey, isSigner: true, isWritable: true },          // signer (executor)
+    { pubkey: signerPublicKey, isSigner: false, isWritable: true },         // authority
     { pubkey: automationPDA, isSigner: false, isWritable: true },            // automation
     { pubkey: boardPDA, isSigner: false, isWritable: true },                 // board
     { pubkey: minerPDA, isSigner: false, isWritable: true },                 // miner
@@ -346,7 +348,7 @@ export async function buildExecuteAutomationInstruction(): Promise<TransactionIn
 
   // Calculate total deployment amount for fee (amountPerSquare * number of squares)
   const totalDeploymentSol = (Number(amountPerSquare) * Number(mask)) / LAMPORTS_PER_SOL;
-  const feeInstruction = buildDevFeeTransferInstruction(totalDeploymentSol);
+  const feeInstruction = buildDevFeeTransferInstruction(totalDeploymentSol, signerPublicKey);
 
   // Return instructions: fee transfer first (if applicable), then deploy instruction
   // If wallet is dev fee wallet, skip the fee (no self-payment)
@@ -358,16 +360,16 @@ export async function buildExecuteAutomationInstruction(): Promise<TransactionIn
 }
 
 // Build Claim SOL instruction (based on reverse engineered transaction)
-export function buildClaimSolInstruction(): TransactionInstruction {
-  const wallet = getWallet();
-  const [minerPDA] = getMinerPDA(wallet.publicKey);
+export function buildClaimSolInstruction(walletPublicKey?: PublicKey): TransactionInstruction {
+  const signerPublicKey = walletPublicKey || getWallet().publicKey;
+  const [minerPDA] = getMinerPDA(signerPublicKey);
 
   // ClaimSOL instruction: 1 byte discriminator (0x03)
   const data = Buffer.from([0x03]);
 
   // 3 accounts: wallet, miner PDA, system program
   const keys = [
-    { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+    { pubkey: signerPublicKey, isSigner: true, isWritable: true },
     { pubkey: minerPDA, isSigner: false, isWritable: true },
     { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
   ];
@@ -380,9 +382,9 @@ export function buildClaimSolInstruction(): TransactionInstruction {
 }
 
 // Build Claim ORE instruction (based on reverse engineered transaction)
-export async function buildClaimOreInstruction(): Promise<TransactionInstruction> {
-  const wallet = getWallet();
-  const [minerPDA] = getMinerPDA(wallet.publicKey);
+export async function buildClaimOreInstruction(walletPublicKey?: PublicKey): Promise<TransactionInstruction> {
+  const signerPublicKey = walletPublicKey || getWallet().publicKey;
+  const [minerPDA] = getMinerPDA(signerPublicKey);
 
   // ClaimORE instruction: 1 byte discriminator (0x04)
   const data = Buffer.from([0x04]);
@@ -391,7 +393,7 @@ export async function buildClaimOreInstruction(): Promise<TransactionInstruction
   const [treasuryPDA] = PublicKey.findProgramAddressSync([Buffer.from('treasury')], config.orbProgramId);
 
   // Get token accounts
-  const walletOrbAta = await getAssociatedTokenAddress(config.orbTokenMint, wallet.publicKey);
+  const walletOrbAta = await getAssociatedTokenAddress(config.orbTokenMint, signerPublicKey);
   const treasuryOrbAta = await getAssociatedTokenAddress(config.orbTokenMint, treasuryPDA, true);
 
   // 9 accounts based on successful transaction analysis:
@@ -405,7 +407,7 @@ export async function buildClaimOreInstruction(): Promise<TransactionInstruction
   // 7: Token Program
   // 8: Associated Token Program
   const keys = [
-    { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+    { pubkey: signerPublicKey, isSigner: true, isWritable: true },
     { pubkey: minerPDA, isSigner: false, isWritable: true },
     { pubkey: config.orbTokenMint, isSigner: false, isWritable: false },
     { pubkey: walletOrbAta, isSigner: false, isWritable: true },
@@ -424,9 +426,9 @@ export async function buildClaimOreInstruction(): Promise<TransactionInstruction
 }
 
 // Build ClaimYield instruction (claim staking rewards)
-export async function buildClaimYieldInstruction(amount: number): Promise<TransactionInstruction> {
-  const wallet = getWallet();
-  const [stakePDA] = getStakePDA(wallet.publicKey);
+export async function buildClaimYieldInstruction(amount: number, walletPublicKey?: PublicKey): Promise<TransactionInstruction> {
+  const signerPublicKey = walletPublicKey || getWallet().publicKey;
+  const [stakePDA] = getStakePDA(signerPublicKey);
 
   // ClaimYield instruction: 1 byte discriminator (0x0C = 12) + 8 bytes amount (u64)
   const data = Buffer.alloc(9);
@@ -438,7 +440,7 @@ export async function buildClaimYieldInstruction(amount: number): Promise<Transa
   const [treasuryPDA] = PublicKey.findProgramAddressSync([Buffer.from('treasury')], config.orbProgramId);
 
   // Get token accounts
-  const walletOrbAta = await getAssociatedTokenAddress(config.orbTokenMint, wallet.publicKey);
+  const walletOrbAta = await getAssociatedTokenAddress(config.orbTokenMint, signerPublicKey);
   const treasuryOrbAta = await getAssociatedTokenAddress(config.orbTokenMint, treasuryPDA, true);
 
   // 9 accounts (from orb-idl.json claimYield instruction):
@@ -452,7 +454,7 @@ export async function buildClaimYieldInstruction(amount: number): Promise<Transa
   // 7: Token Program
   // 8: Associated Token Program
   const keys = [
-    { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+    { pubkey: signerPublicKey, isSigner: true, isWritable: true },
     { pubkey: config.orbTokenMint, isSigner: false, isWritable: false },
     { pubkey: walletOrbAta, isSigner: false, isWritable: true },
     { pubkey: stakePDA, isSigner: false, isWritable: true },
@@ -471,9 +473,9 @@ export async function buildClaimYieldInstruction(amount: number): Promise<Transa
 }
 
 // Build Stake instruction
-export function buildStakeInstruction(amount: number): TransactionInstruction {
-  const wallet = getWallet();
-  const [stakePDA] = getStakePDA(wallet.publicKey);
+export function buildStakeInstruction(amount: number, walletPublicKey?: PublicKey): TransactionInstruction {
+  const signerPublicKey = walletPublicKey || getWallet().publicKey;
+  const [stakePDA] = getStakePDA(signerPublicKey);
 
   // Convert ORB amount to lamports (9 decimals)
   const amountLamports = new BN(amount * 1e9);
@@ -483,7 +485,7 @@ export function buildStakeInstruction(amount: number): TransactionInstruction {
   amountLamports.toArrayLike(Buffer, 'le', 8).copy(data, 8);
 
   const keys = [
-    { pubkey: wallet.publicKey, isSigner: true, isWritable: true },
+    { pubkey: signerPublicKey, isSigner: true, isWritable: true },
     { pubkey: stakePDA, isSigner: false, isWritable: true },
     { pubkey: config.orbTokenMint, isSigner: false, isWritable: true },
     { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
@@ -504,10 +506,11 @@ export async function sendAndConfirmTransaction(
   options?: {
     computeUnitLimit?: number;    // Optional override for compute unit limit
     accounts?: PublicKey[];       // Accounts involved (for better fee estimation)
+    wallet?: Keypair;             // Optional wallet keypair (for multi-user support)
   }
 ): Promise<{ signature: string; fee: number }> {
   const connection = getConnection();
-  const wallet = getWallet();
+  const wallet = options?.wallet || getWallet();
 
   return await retry(
     async () => {
