@@ -9,3 +9,9 @@ wallets.json
 data/
 logs/
 .claude/
+
+# Compiled TypeScript files
+*.js
+*.js.map
+*.d.ts
+!*.config.js
