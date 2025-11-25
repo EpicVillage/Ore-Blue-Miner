@@ -122,6 +122,7 @@ interface SessionData {
 class OrbMiningBot {
   private bot: Telegraf<BotContext>;
   private sessions: Map<number, SessionData> = new Map();
+  private lastRefreshTime: Map<number, number> = new Map(); // Track last refresh time per user
   private ownerId: string;
 
   constructor(token: string, _config: any) {
@@ -694,6 +695,21 @@ This action cannot be undone.`;
 
     // Refresh actions - edit existing message
     this.bot.action('refresh_status', async (ctx) => {
+      const userId = ctx.from!.id;
+      const now = Date.now();
+      const lastRefresh = this.lastRefreshTime.get(userId) || 0;
+      const cooldown = 5000; // 5 seconds cooldown
+
+      // Check if user is still in cooldown
+      if (now - lastRefresh < cooldown) {
+        const remainingSeconds = Math.ceil((cooldown - (now - lastRefresh)) / 1000);
+        await ctx.answerCbQuery(`Please wait ${remainingSeconds}s before refreshing again`, { show_alert: false });
+        return;
+      }
+
+      // Update last refresh time
+      this.lastRefreshTime.set(userId, now);
+
       await ctx.answerCbQuery('Refreshing...');
       await this.handleStatus(ctx, true);
     });
@@ -714,6 +730,21 @@ This action cannot be undone.`;
     });
 
     this.bot.action('refresh_control', async (ctx) => {
+      const userId = ctx.from!.id;
+      const now = Date.now();
+      const lastRefresh = this.lastRefreshTime.get(userId) || 0;
+      const cooldown = 5000; // 5 seconds cooldown
+
+      // Check if user is still in cooldown
+      if (now - lastRefresh < cooldown) {
+        const remainingSeconds = Math.ceil((cooldown - (now - lastRefresh)) / 1000);
+        await ctx.answerCbQuery(`Please wait ${remainingSeconds}s before refreshing again`, { show_alert: false });
+        return;
+      }
+
+      // Update last refresh time
+      this.lastRefreshTime.set(userId, now);
+
       await ctx.answerCbQuery('Refreshing...');
       await this.handleControl(ctx, true);
     });
@@ -1184,7 +1215,13 @@ Updated: ${new Date().toLocaleTimeString()}`;
           reply_markup: keyboard,
         });
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Ignore "message is not modified" error (happens when clicking refresh with no changes)
+      if (error?.message?.includes('message is not modified')) {
+        logger.debug('[Telegram] Status page unchanged, ignoring refresh');
+        return;
+      }
+
       logger.error('[Telegram] Error in handleStatus:', error);
       await ctx.reply('Failed to fetch status. Please try again.');
     }
