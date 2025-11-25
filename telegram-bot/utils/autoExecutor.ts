@@ -115,14 +115,14 @@ async function executeUserAutomation(
     // Check motherload threshold
     const currentMotherload = Number(treasury.motherlode) / 1e9;
     if (currentMotherload < settings.motherload_threshold) {
-      logger.debug(`[Auto-Executor] User ${telegramId}: Motherload ${currentMotherload.toFixed(2)} below threshold ${settings.motherload_threshold}`);
+      logger.info(`[Auto-Executor] User ${telegramId}: ⏸️ Skipped - Motherload ${currentMotherload.toFixed(2)} ORB below threshold ${settings.motherload_threshold} ORB`);
       return false;
     }
 
     // Get automation info
     const automationInfo = await getAutomationInfo(userPublicKey);
     if (!automationInfo) {
-      logger.debug(`[Auto-Executor] User ${telegramId}: No automation account found`);
+      logger.warn(`[Auto-Executor] User ${telegramId}: ⚠️ No automation account found`);
       return false;
     }
 
@@ -232,7 +232,7 @@ async function executeUserAutomation(
     const connection = getConnection();
     const currentSlot = await connection.getSlot();
     if (new BN(currentSlot).gte(board.endSlot)) {
-      logger.debug(`[Auto-Executor] User ${telegramId}: Round has ended`);
+      logger.info(`[Auto-Executor] User ${telegramId}: ⏸️ Skipped - Round has ended`);
       return false;
     }
 
@@ -373,13 +373,17 @@ async function executorLoop(): Promise<void> {
       // Execute automation for each user
       for (const user of users) {
         try {
+          logger.info(`[Auto-Executor] Processing user ${user.telegram_id}...`);
           const userWallet = await getUserWallet(user.telegram_id);
           if (!userWallet) {
             logger.warn(`[Auto-Executor] User ${user.telegram_id}: Wallet not found`);
             continue;
           }
 
-          await executeUserAutomation(user.telegram_id, userWallet, board, treasury);
+          const executed = await executeUserAutomation(user.telegram_id, userWallet, board, treasury);
+          if (!executed) {
+            logger.debug(`[Auto-Executor] User ${user.telegram_id}: Execution skipped (no action taken)`);
+          }
 
           // Small delay between users to avoid rate limiting
           await new Promise(resolve => setTimeout(resolve, 1000));
