@@ -23,7 +23,7 @@ export async function initializeUserSettingsTable(): Promise<void> {
       auto_swap_enabled INTEGER DEFAULT 0,
       swap_threshold REAL DEFAULT 100,
       min_orb_price REAL DEFAULT 0,
-      min_orb_to_keep REAL DEFAULT 10,
+      min_orb_to_keep REAL DEFAULT 1,
       min_swap_amount REAL DEFAULT 1,
       slippage_bps INTEGER DEFAULT 300,
       auto_stake_enabled INTEGER DEFAULT 0,
@@ -36,11 +36,11 @@ export async function initializeUserSettingsTable(): Promise<void> {
     )
   `);
 
-  // Migration: Update min_swap_amount for users with old default (10) to new default (1)
+  // Migration: Update min_swap_amount and min_orb_to_keep from old default (10) to new default (1)
   await runQuery(`
     UPDATE user_settings
-    SET min_swap_amount = 1
-    WHERE min_swap_amount > 1
+    SET min_swap_amount = 1, min_orb_to_keep = 1
+    WHERE min_swap_amount > 1 OR min_orb_to_keep > 1
   `);
 
   logger.info('[Telegram DB] User settings table initialized');
