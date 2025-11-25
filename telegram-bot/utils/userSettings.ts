@@ -36,6 +36,13 @@ export async function initializeUserSettingsTable(): Promise<void> {
     )
   `);
 
+  // Migration: Update min_swap_amount for users with old default (10) to new default (1)
+  await runQuery(`
+    UPDATE user_settings
+    SET min_swap_amount = 1
+    WHERE min_swap_amount > 1
+  `);
+
   logger.info('[Telegram DB] User settings table initialized');
 }
 
