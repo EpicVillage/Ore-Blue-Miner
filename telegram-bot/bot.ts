@@ -223,7 +223,7 @@ class OrbMiningBot {
 
           if (result.success) {
             const message = `✅ *Swap Successful!*\n\nSwapped: ${formatORB(result.orbSwapped!)}\nReceived: ${formatSOL(result.solReceived!)}\n\n[View on Solscan](https://solscan.io/tx/${result.signature})`;
-            await ctx.reply(message, { parse_mode: 'Markdown' });
+            await ctx.reply(message, { parse_mode: 'Markdown', link_preview_options: { is_disabled: true } });
           } else {
             await ctx.reply(`❌ Swap failed: ${result.error}`);
             await notifyTransactionFailed(telegramId, 'Swap', result.error!);
@@ -251,7 +251,7 @@ class OrbMiningBot {
 
           if (result.success) {
             const message = `✅ *Deployment Successful!*\n\nDeployed: ${formatSOL(result.solDeployed!)}\nRound: #${result.roundId}\n\n[View on Solscan](https://solscan.io/tx/${result.signature})\n\nGood luck! 🍀`;
-            await ctx.reply(message, { parse_mode: 'Markdown' });
+            await ctx.reply(message, { parse_mode: 'Markdown', link_preview_options: { is_disabled: true } });
           } else {
             await ctx.reply(`❌ Deployment failed: ${result.error}`);
             await notifyTransactionFailed(telegramId, 'Deploy', result.error!);
@@ -1826,7 +1826,7 @@ Auto-claim features are coming soon for multi-user support.`;
 
       if (result.success) {
         const message = `✅ *SOL Claimed Successfully!*\n\nAmount: ${formatSOL(result.solAmount!)}\n\n[View on Solscan](https://solscan.io/tx/${result.signature})`;
-        await ctx.reply(message, { parse_mode: 'Markdown' });
+        await ctx.reply(message, { parse_mode: 'Markdown', link_preview_options: { is_disabled: true } });
       } else {
         await ctx.reply(`❌ Failed to claim SOL: ${result.error}`);
         await notifyTransactionFailed(telegramId, 'Claim SOL', result.error!);
@@ -1857,7 +1857,7 @@ Auto-claim features are coming soon for multi-user support.`;
 
       if (result.success) {
         const message = `✅ *ORB Claimed Successfully!*\n\nAmount: ${formatORB(result.orbAmount!)}\n\n[View on Solscan](https://solscan.io/tx/${result.signature})`;
-        await ctx.reply(message, { parse_mode: 'Markdown' });
+        await ctx.reply(message, { parse_mode: 'Markdown', link_preview_options: { is_disabled: true } });
       } else {
         await ctx.reply(`❌ Failed to claim ORB: ${result.error}`);
         await notifyTransactionFailed(telegramId, 'Claim ORB', result.error!);
@@ -1888,7 +1888,7 @@ Auto-claim features are coming soon for multi-user support.`;
 
       if (result.success) {
         const message = `✅ *Staking Rewards Claimed!*\n\nSOL: ${formatSOL(result.solAmount || 0)}\nORB: ${formatORB(result.orbAmount || 0)}\n\n[View on Solscan](https://solscan.io/tx/${result.signature})`;
-        await ctx.reply(message, { parse_mode: 'Markdown' });
+        await ctx.reply(message, { parse_mode: 'Markdown', link_preview_options: { is_disabled: true } });
       } else {
         await ctx.reply(`❌ Failed to claim staking rewards: ${result.error}`);
         await notifyTransactionFailed(telegramId, 'Claim Staking', result.error!);

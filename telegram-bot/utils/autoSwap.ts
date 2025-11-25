@@ -97,7 +97,7 @@ async function processUserAutoSwap(telegramId: string): Promise<void> {
       // Send notification
       if (bot) {
         try {
-          await bot.telegram.sendMessage(telegramId, message, { parse_mode: 'Markdown' });
+          await bot.telegram.sendMessage(telegramId, message, { parse_mode: 'Markdown', link_preview_options: { is_disabled: true } });
         } catch (error) {
           logger.warn(`[Auto-Swap] Failed to send notification to ${telegramId}:`, error);
         }
