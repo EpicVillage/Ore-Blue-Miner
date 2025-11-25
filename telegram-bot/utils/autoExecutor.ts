@@ -131,7 +131,7 @@ async function executeUserAutomation(
       logger.info(`[Auto-Executor] User ${telegramId}: Automation depleted (0 SOL remaining)`);
 
       // Auto-restart: close old automation and create new one
-      logger.info(`[Auto-Executor] User ${telegramId}: 🔄 Auto-restarting automation with new budget...`);
+      logger.info(`[Auto-Executor] User ${telegramId}: 🔄 Auto-restarting automation (completely depleted)...`);
 
       try {
         const { closeUserAutomation, createUserAutomation } = await import('./userAutomation');
@@ -153,6 +153,22 @@ async function executeUserAutomation(
           return false;
         } else {
           logger.warn(`[Auto-Executor] User ${telegramId}: Failed to create new automation: ${createResult.error}`);
+
+          // Notify user about automation stopping due to insufficient funds
+          if (createResult.error?.includes('Insufficient balance')) {
+            try {
+              const { Telegraf } = await import('telegraf');
+              const botToken = process.env.TELEGRAM_BOT_TOKEN;
+              if (botToken) {
+                const bot = new Telegraf(botToken);
+                const message = `⚠️ *Automation Stopped*\n\nYour automation has stopped due to insufficient SOL balance.\n\n${createResult.error}\n\nPlease add more SOL to your wallet or adjust your automation settings (/settings) to continue.`;
+                await bot.telegram.sendMessage(telegramId, message, { parse_mode: 'Markdown', link_preview_options: { is_disabled: true } });
+              }
+            } catch (notifyError) {
+              logger.error(`[Auto-Executor] Failed to send low balance notification to ${telegramId}:`, notifyError);
+            }
+          }
+
           return false;
         }
       } catch (error) {
@@ -166,7 +182,7 @@ async function executeUserAutomation(
       logger.info(`[Auto-Executor] User ${telegramId}: Budget depleted (${(automationInfo.balance / 1e9).toFixed(4)} SOL < ${(automationInfo.costPerRound / 1e9).toFixed(4)} SOL)`);
 
       // Auto-restart: close old automation and create new one
-      logger.info(`[Auto-Executor] User ${telegramId}: 🔄 Auto-restarting automation with new budget...`);
+      logger.info(`[Auto-Executor] User ${telegramId}: 🔄 Auto-restarting automation (budget depleted)...`);
 
       try {
         const { closeUserAutomation, createUserAutomation } = await import('./userAutomation');
@@ -188,6 +204,22 @@ async function executeUserAutomation(
           return false;
         } else {
           logger.warn(`[Auto-Executor] User ${telegramId}: Failed to create new automation: ${createResult.error}`);
+
+          // Notify user about automation stopping due to insufficient funds
+          if (createResult.error?.includes('Insufficient balance')) {
+            try {
+              const { Telegraf } = await import('telegraf');
+              const botToken = process.env.TELEGRAM_BOT_TOKEN;
+              if (botToken) {
+                const bot = new Telegraf(botToken);
+                const message = `⚠️ *Automation Stopped*\n\nYour automation has stopped due to insufficient SOL balance.\n\n${createResult.error}\n\nPlease add more SOL to your wallet or adjust your automation settings (/settings) to continue.`;
+                await bot.telegram.sendMessage(telegramId, message, { parse_mode: 'Markdown', link_preview_options: { is_disabled: true } });
+              }
+            } catch (notifyError) {
+              logger.error(`[Auto-Executor] Failed to send low balance notification to ${telegramId}:`, notifyError);
+            }
+          }
+
           return false;
         }
       } catch (error) {
