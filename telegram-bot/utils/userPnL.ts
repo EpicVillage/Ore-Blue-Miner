@@ -109,7 +109,7 @@ export async function calculateUserPnL(
       COALESCE(SUM(protocol_fee_sol), 0) as total_protocol_fees,
       COALESCE(SUM(CASE WHEN type IN ('deploy', 'claim_sol', 'claim_orb', 'mine') THEN orb_amount ELSE 0 END), 0) as total_orb_earned
     FROM transactions
-    WHERE wallet_address = ? AND status = 'success'
+    WHERE (wallet_address = ? OR wallet_address IS NULL) AND status = 'success'
   `, [publicKey]);
 
   // Get rounds participated count
@@ -126,14 +126,14 @@ export async function calculateUserPnL(
       COUNT(*) as total,
       SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful
     FROM transactions
-    WHERE wallet_address = ?
+    WHERE wallet_address = ? OR wallet_address IS NULL
   `, [publicKey]);
 
   // Get average ORB price from transactions
   const avgPrice = await getQuery<{ avg_price: number }>(`
     SELECT AVG(orb_price_usd) as avg_price
     FROM transactions
-    WHERE wallet_address = ? AND orb_price_usd > 0
+    WHERE (wallet_address = ? OR wallet_address IS NULL) AND orb_price_usd > 0
   `, [publicKey]);
 
   const totalSolDeployed = txSummary?.total_deployed || 0;
