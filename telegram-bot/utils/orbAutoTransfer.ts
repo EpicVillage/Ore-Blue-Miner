@@ -215,12 +215,15 @@ export async function checkAndExecuteOrbTransfer(telegramId: string): Promise<Tr
     }
 
     // Record transaction
+    const wallet = await getUserWallet(telegramId);
     await recordTransaction({
       type: 'swap', // Using swap as closest match for transfer
       signature: transferResult.signature!,
       orbAmount: transferAmount,
       status: 'success',
-      notes: `Auto-transfer ${transferAmount.toFixed(2)} ORB to ${settings.transfer_recipient_address} for user ${telegramId}`
+      notes: `Auto-transfer ${transferAmount.toFixed(2)} ORB to ${settings.transfer_recipient_address} for user ${telegramId}`,
+      walletAddress: wallet?.publicKey.toBase58(),
+      telegramId,
     });
 
     // Notify user of success

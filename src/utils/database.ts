@@ -294,15 +294,18 @@ export interface TransactionRecord {
   devFeeSol?: number;
   walletBalanceBefore?: number;
   walletBalanceAfter?: number;
+  walletAddress?: string; // For multi-user tracking
+  telegramId?: string; // For multi-user tracking
 }
 
 export async function recordTransaction(record: TransactionRecord): Promise<void> {
   const sql = `
     INSERT INTO transactions (
       timestamp, type, signature, round_id, sol_amount, orb_amount, status, notes,
-      orb_price_usd, tx_fee_sol, protocol_fee_sol, dev_fee_sol, wallet_balance_before, wallet_balance_after
+      orb_price_usd, tx_fee_sol, protocol_fee_sol, dev_fee_sol, wallet_balance_before, wallet_balance_after,
+      wallet_address, telegram_id
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   const params = [
@@ -320,10 +323,12 @@ export async function recordTransaction(record: TransactionRecord): Promise<void
     record.devFeeSol || 0,
     record.walletBalanceBefore || 0,
     record.walletBalanceAfter || 0,
+    record.walletAddress || null,
+    record.telegramId || null,
   ];
 
   await runQuery(sql, params);
-  logger.debug(`Recorded transaction: ${record.type} - ${record.status}`);
+  logger.debug(`Recorded transaction: ${record.type} - ${record.status}${record.telegramId ? ` (user: ${record.telegramId})` : ''}`);
 }
 
 export async function recordRound(

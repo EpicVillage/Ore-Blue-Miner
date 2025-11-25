@@ -124,6 +124,8 @@ export async function closeUserAutomation(userWallet: Keypair, telegramId: strin
         notes: `User ${telegramId} closed automation - returned ${returnedSol.toFixed(4)} SOL`,
         orbPriceUsd,
         txFeeSol: 0.0005,
+        walletAddress: userWallet.publicKey.toBase58(),
+        telegramId,
       });
     } catch (error) {
       logger.error('[User Automation] Failed to record transaction:', error);
@@ -243,6 +245,8 @@ export async function createUserAutomation(userWallet: Keypair, telegramId: stri
         notes: `User ${telegramId} setup: ${targetRounds} rounds @ ${solPerRound.toFixed(4)} SOL/round (motherload: ${motherloadOrb.toFixed(2)} ORB)`,
         orbPriceUsd,
         txFeeSol: 0.005,
+        walletAddress: userWallet.publicKey.toBase58(),
+        telegramId,
       });
     } catch (error) {
       logger.error('[User Automation] Failed to record transaction:', error);

@@ -326,6 +326,8 @@ async function executeUserAutomation(
         orbPriceUsd,
         txFeeSol: 0.000005,
         devFeeSol: devFee,
+        walletAddress: userPublicKey.toBase58(),
+        telegramId,
       });
     } catch (error) {
       logger.debug(`[Auto-Executor] Failed to record transaction for user ${telegramId}:`, error);

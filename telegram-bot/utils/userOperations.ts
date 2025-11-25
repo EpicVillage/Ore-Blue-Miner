@@ -84,6 +84,8 @@ export async function claimUserSol(
       solAmount: miningSol,
       status: 'success',
       notes: `Claimed ${miningSol.toFixed(4)} SOL for user ${telegramId}`,
+      walletAddress: wallet.publicKey.toBase58(),
+      telegramId,
     });
 
     logger.info(`[User Claim] Successfully claimed ${miningSol.toFixed(4)} SOL | ${signature}`);
@@ -137,6 +139,8 @@ export async function claimUserOrb(
       orbAmount: miningOrb,
       status: 'success',
       notes: `Claimed ${miningOrb.toFixed(2)} ORB for user ${telegramId}`,
+      walletAddress: wallet.publicKey.toBase58(),
+      telegramId,
     });
 
     logger.info(`[User Claim] Successfully claimed ${miningOrb.toFixed(2)} ORB | ${signature}`);
@@ -250,6 +254,8 @@ export async function swapUserOrbToSol(
         solAmount: result.solReceived || 0,
         status: 'success',
         notes: `Swapped ${amount.toFixed(2)} ORB → ${result.solReceived?.toFixed(4)} SOL for user ${telegramId}`,
+        walletAddress: wallet.publicKey.toBase58(),
+        telegramId,
       });
 
       logger.info(`[User Swap] Successfully swapped ${amount.toFixed(2)} ORB → ${result.solReceived?.toFixed(4)} SOL | ${result.signature}`);
@@ -324,6 +330,8 @@ export async function deployUserSol(
       notes: `Deployed ${amount.toFixed(4)} SOL to round ${roundId} for user ${telegramId} (dev fee: ${devFee.toFixed(6)} SOL)`,
       txFeeSol: 0.000005,
       devFeeSol: devFee,
+      walletAddress: wallet.publicKey.toBase58(),
+      telegramId,
     });
 
     // Record user round participation

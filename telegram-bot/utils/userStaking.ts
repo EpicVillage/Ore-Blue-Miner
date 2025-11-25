@@ -122,6 +122,8 @@ export async function stakeUserOrb(
       orbAmount: amount,
       status: 'success',
       notes: `Staked ${amount} ORB for user ${telegramId}`,
+      walletAddress: wallet.publicKey.toBase58(),
+      telegramId,
     });
 
     logger.info(`[User Staking] Successfully staked ${amount} ORB | ${signature}`);
@@ -168,6 +170,8 @@ export async function claimUserStakingRewards(
       orbAmount: claimedAmount,
       status: 'success',
       notes: `Claimed ${claimedAmount} ORB staking rewards for user ${telegramId}`,
+      walletAddress: wallet.publicKey.toBase58(),
+      telegramId,
     });
 
     logger.info(`[User Staking] Successfully claimed ${claimedAmount} ORB staking rewards | ${signature}`);
