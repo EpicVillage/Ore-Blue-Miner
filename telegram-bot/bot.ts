@@ -1445,12 +1445,12 @@ Active Since: ${new Date(user!.created_at).toLocaleDateString()}
 🔮 ${formatORB(balances.orb)}
 
 *Mining Stats:*
-• Total Mines: ${miningStats.totalMines}
+• Total Deployments: ${miningStats.totalMines}
 • Successful: ${miningStats.successfulMines}
-• Total ORB Mined: ${formatORB(miningStats.totalOrbMined)}
-• Avg per Mine: ${formatORB(miningStats.avgOrbPerMine)}
+• Total ORB Earned: ${formatORB(miningStats.totalOrbMined)}
+• Avg per Deployment: ${formatORB(miningStats.avgOrbPerMine)}
 
-*Total Earnings (Claims):*
+*Total Claims:*
 • SOL Claimed: ${formatSOL(claimStats.totalSolClaimed)}
 • ORB Claimed: ${formatORB(claimStats.totalOrbClaimed)}
 • Total Claims: ${claimStats.totalClaims}

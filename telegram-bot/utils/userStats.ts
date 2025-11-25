@@ -79,6 +79,7 @@ export async function getUserPerformanceStats(walletAddress: string): Promise<{
 
 /**
  * Get mining stats for a specific user
+ * Tracks deployments (which generate mining rewards)
  */
 export async function getUserMiningStats(walletAddress: string): Promise<{
   totalMines: number;
@@ -91,17 +92,29 @@ export async function getUserMiningStats(walletAddress: string): Promise<{
       SELECT
         COUNT(*) as totalMines,
         SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successfulMines,
-        SUM(COALESCE(orb_amount, 0)) as totalOrbMined,
-        AVG(CASE WHEN status = 'success' AND orb_amount > 0 THEN orb_amount ELSE NULL END) as avgOrbPerMine
+        SUM(COALESCE(sol_amount, 0)) as totalSolDeployed
       FROM transactions
-      WHERE type = 'mine' AND (wallet_address = ? OR wallet_address IS NULL)
+      WHERE type = 'deploy' AND (wallet_address = ? OR wallet_address IS NULL)
     `, [walletAddress]);
 
+    // Get ORB earned from claims (actual mining rewards)
+    const claimStats = await getQuery<any>(`
+      SELECT
+        SUM(COALESCE(orb_amount, 0)) as totalOrbClaimed
+      FROM transactions
+      WHERE type = 'claim_orb' AND status = 'success'
+        AND (wallet_address = ? OR wallet_address IS NULL)
+    `, [walletAddress]);
+
+    const totalMines = stats?.totalMines || 0;
+    const totalOrbMined = claimStats?.totalOrbClaimed || 0;
+    const avgOrbPerMine = totalMines > 0 ? totalOrbMined / totalMines : 0;
+
     return {
-      totalMines: stats?.totalMines || 0,
+      totalMines,
       successfulMines: stats?.successfulMines || 0,
-      totalOrbMined: stats?.totalOrbMined || 0,
-      avgOrbPerMine: stats?.avgOrbPerMine || 0,
+      totalOrbMined,
+      avgOrbPerMine,
     };
   } catch (error) {
     logger.error('[User Stats] Failed to get mining stats:', error);
@@ -126,10 +139,10 @@ export async function getUserClaimStats(walletAddress: string): Promise<{
     const stats = await getQuery<any>(`
       SELECT
         COUNT(*) as totalClaims,
-        SUM(COALESCE(orb_amount, 0)) as totalOrbClaimed,
-        SUM(COALESCE(sol_amount, 0)) as totalSolClaimed
+        SUM(CASE WHEN type = 'claim_orb' THEN COALESCE(orb_amount, 0) ELSE 0 END) as totalOrbClaimed,
+        SUM(CASE WHEN type = 'claim_sol' THEN COALESCE(sol_amount, 0) ELSE 0 END) as totalSolClaimed
       FROM transactions
-      WHERE (type = 'claim_sol' OR type = 'claim_orb') AND status = 'success'
+      WHERE (type = 'claim_sol' OR type = 'claim_orb' OR type = 'claim_staking') AND status = 'success'
         AND (wallet_address = ? OR wallet_address IS NULL)
     `, [walletAddress]);
 
