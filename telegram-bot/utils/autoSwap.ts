@@ -92,7 +92,7 @@ async function processUserAutoSwap(telegramId: string): Promise<void> {
     const result = await swapUserOrbToSol(telegramId, swapAmount);
 
     if (result.success && result.solReceived) {
-      const message = `✅ *Auto-Swap Successful*\n\nSwapped: ${formatORB(swapAmount)} ORB\nReceived: ${formatSOL(result.solReceived)} SOL\n\nTransaction: \`${result.signature}\``;
+      const message = `✅ *Auto-Swap Successful*\n\nSwapped: ${formatORB(swapAmount)} ORB\nReceived: ${formatSOL(result.solReceived)} SOL\n\n[View on Solscan](https://solscan.io/tx/${result.signature})`;
 
       // Send notification
       if (bot) {

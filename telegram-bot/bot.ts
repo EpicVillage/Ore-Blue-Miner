@@ -222,15 +222,8 @@ class OrbMiningBot {
           const result = await swapUserOrbToSol(telegramId, amount);
 
           if (result.success) {
-            const message = `✅ *Swap Successful!*\n\nSwapped: ${formatORB(result.orbSwapped!)}\nReceived: ${formatSOL(result.solReceived!)}\n\nSignature: \`${result.signature!.slice(0, 8)}...${result.signature!.slice(-8)}\``;
+            const message = `✅ *Swap Successful!*\n\nSwapped: ${formatORB(result.orbSwapped!)}\nReceived: ${formatSOL(result.solReceived!)}\n\n[View on Solscan](https://solscan.io/tx/${result.signature})`;
             await ctx.reply(message, { parse_mode: 'Markdown' });
-
-            await notifyTransactionSuccess(
-              telegramId,
-              'Swap',
-              result.signature!,
-              `${formatORB(result.orbSwapped!)} → ${formatSOL(result.solReceived!)}`
-            );
           } else {
             await ctx.reply(`❌ Swap failed: ${result.error}`);
             await notifyTransactionFailed(telegramId, 'Swap', result.error!);
@@ -257,15 +250,8 @@ class OrbMiningBot {
           const result = await deployUserSol(telegramId, amount);
 
           if (result.success) {
-            const message = `✅ *Deployment Successful!*\n\nDeployed: ${formatSOL(result.solDeployed!)}\nRound: #${result.roundId}\n\nSignature: \`${result.signature!.slice(0, 8)}...${result.signature!.slice(-8)}\`\n\nGood luck! 🍀`;
+            const message = `✅ *Deployment Successful!*\n\nDeployed: ${formatSOL(result.solDeployed!)}\nRound: #${result.roundId}\n\n[View on Solscan](https://solscan.io/tx/${result.signature})\n\nGood luck! 🍀`;
             await ctx.reply(message, { parse_mode: 'Markdown' });
-
-            await notifyTransactionSuccess(
-              telegramId,
-              'Deploy',
-              result.signature!,
-              `Deployed ${formatSOL(result.solDeployed!)} to Round #${result.roundId}`
-            );
           } else {
             await ctx.reply(`❌ Deployment failed: ${result.error}`);
             await notifyTransactionFailed(telegramId, 'Deploy', result.error!);
@@ -1839,16 +1825,8 @@ Auto-claim features are coming soon for multi-user support.`;
       const result = await claimUserSol(telegramId);
 
       if (result.success) {
-        const message = `✅ *SOL Claimed Successfully!*\n\nAmount: ${formatSOL(result.solAmount!)}\n\nSignature: \`${result.signature!.slice(0, 8)}...${result.signature!.slice(-8)}\``;
+        const message = `✅ *SOL Claimed Successfully!*\n\nAmount: ${formatSOL(result.solAmount!)}\n\n[View on Solscan](https://solscan.io/tx/${result.signature})`;
         await ctx.reply(message, { parse_mode: 'Markdown' });
-
-        // Send notification
-        await notifyTransactionSuccess(
-          telegramId,
-          'Claim SOL',
-          result.signature!,
-          `Claimed ${formatSOL(result.solAmount!)}`
-        );
       } else {
         await ctx.reply(`❌ Failed to claim SOL: ${result.error}`);
         await notifyTransactionFailed(telegramId, 'Claim SOL', result.error!);
@@ -1878,16 +1856,8 @@ Auto-claim features are coming soon for multi-user support.`;
       const result = await claimUserOrb(telegramId);
 
       if (result.success) {
-        const message = `✅ *ORB Claimed Successfully!*\n\nAmount: ${formatORB(result.orbAmount!)}\n\nSignature: \`${result.signature!.slice(0, 8)}...${result.signature!.slice(-8)}\``;
+        const message = `✅ *ORB Claimed Successfully!*\n\nAmount: ${formatORB(result.orbAmount!)}\n\n[View on Solscan](https://solscan.io/tx/${result.signature})`;
         await ctx.reply(message, { parse_mode: 'Markdown' });
-
-        // Send notification
-        await notifyTransactionSuccess(
-          telegramId,
-          'Claim ORB',
-          result.signature!,
-          `Claimed ${formatORB(result.orbAmount!)}`
-        );
       } else {
         await ctx.reply(`❌ Failed to claim ORB: ${result.error}`);
         await notifyTransactionFailed(telegramId, 'Claim ORB', result.error!);
@@ -1917,16 +1887,8 @@ Auto-claim features are coming soon for multi-user support.`;
       const result = await claimUserStakingRewards(telegramId);
 
       if (result.success) {
-        const message = `✅ *Staking Rewards Claimed!*\n\nSOL: ${formatSOL(result.solAmount || 0)}\nORB: ${formatORB(result.orbAmount || 0)}\n\nSignature: \`${result.signature!.slice(0, 8)}...${result.signature!.slice(-8)}\``;
+        const message = `✅ *Staking Rewards Claimed!*\n\nSOL: ${formatSOL(result.solAmount || 0)}\nORB: ${formatORB(result.orbAmount || 0)}\n\n[View on Solscan](https://solscan.io/tx/${result.signature})`;
         await ctx.reply(message, { parse_mode: 'Markdown' });
-
-        // Send notification
-        await notifyTransactionSuccess(
-          telegramId,
-          'Claim Staking',
-          result.signature!,
-          `Claimed ${formatSOL(result.solAmount || 0)} + ${formatORB(result.orbAmount || 0)}`
-        );
       } else {
         await ctx.reply(`❌ Failed to claim staking rewards: ${result.error}`);
         await notifyTransactionFailed(telegramId, 'Claim Staking', result.error!);
