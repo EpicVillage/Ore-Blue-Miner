@@ -35,6 +35,7 @@ interface AutomationInfo {
 let isRunning = false;
 let executorInterval: NodeJS.Timeout | null = null;
 let lastRoundId: string | null = null;
+let lastMotherloadNotification: Map<string, number> = new Map(); // Track last notification time per user
 
 /**
  * Get automation account info for a user
@@ -116,6 +117,28 @@ async function executeUserAutomation(
     const currentMotherload = Number(treasury.motherlode) / 1e9;
     if (currentMotherload < settings.motherload_threshold) {
       logger.info(`[Auto-Executor] User ${telegramId}: ⏸️ Skipped - Motherload ${currentMotherload.toFixed(2)} ORB below threshold ${settings.motherload_threshold} ORB`);
+
+      // Notify user once every 6 hours (not every round to avoid spam)
+      const now = Date.now();
+      const lastNotified = lastMotherloadNotification.get(telegramId) || 0;
+      const sixHours = 6 * 60 * 60 * 1000;
+
+      if (now - lastNotified > sixHours) {
+        try {
+          const { Telegraf } = await import('telegraf');
+          const botToken = process.env.TELEGRAM_BOT_TOKEN;
+          if (botToken) {
+            const bot = new Telegraf(botToken);
+            const message = `⏸️ *Automation Paused*\n\nYour automation is active but not executing because the current motherload (${currentMotherload.toFixed(2)} ORB) is below your threshold setting (${settings.motherload_threshold} ORB).\n\n💡 *To resume automation:*\nAdjust your motherload threshold in /settings → Mining Configuration → Motherload Threshold\n\nRecommended: 5-10 ORB for active mining`;
+            await bot.telegram.sendMessage(telegramId, message, { parse_mode: 'Markdown', link_preview_options: { is_disabled: true } });
+            lastMotherloadNotification.set(telegramId, now);
+            logger.info(`[Auto-Executor] Sent motherload threshold notification to user ${telegramId}`);
+          }
+        } catch (notifyError) {
+          logger.error(`[Auto-Executor] Failed to send motherload notification to ${telegramId}:`, notifyError);
+        }
+      }
+
       return false;
     }
 
