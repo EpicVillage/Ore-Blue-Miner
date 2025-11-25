@@ -59,7 +59,7 @@ async function processUserAutoClaims(telegramId: string): Promise<void> {
       const result = await claimUserSol(telegramId);
 
       if (result.success && result.solAmount) {
-        claimedRewards.push(`${formatSOL(result.solAmount)} SOL from mining`);
+        claimedRewards.push(`${formatSOL(result.solAmount)} from mining`);
         logger.info(`[Auto-Claim] ${telegramId}: Claimed ${result.solAmount.toFixed(4)} SOL | ${result.signature}`);
       } else {
         logger.warn(`[Auto-Claim] ${telegramId}: Failed to claim SOL - ${result.error}`);
@@ -73,7 +73,7 @@ async function processUserAutoClaims(telegramId: string): Promise<void> {
       const result = await claimUserOrb(telegramId);
 
       if (result.success && result.orbAmount) {
-        claimedRewards.push(`${formatORB(result.orbAmount)} ORB from mining`);
+        claimedRewards.push(`${formatORB(result.orbAmount)} from mining`);
         logger.info(`[Auto-Claim] ${telegramId}: Claimed ${result.orbAmount.toFixed(2)} ORB | ${result.signature}`);
       } else {
         logger.warn(`[Auto-Claim] ${telegramId}: Failed to claim ORB - ${result.error}`);
@@ -87,7 +87,7 @@ async function processUserAutoClaims(telegramId: string): Promise<void> {
       const result = await claimUserStakingRewards(telegramId);
 
       if (result.success && result.amount) {
-        claimedRewards.push(`${formatORB(result.amount)} ORB from staking`);
+        claimedRewards.push(`${formatORB(result.amount)} from staking`);
         logger.info(`[Auto-Claim] ${telegramId}: Claimed ${result.amount.toFixed(2)} ORB staking rewards | ${result.signature}`);
       } else {
         logger.warn(`[Auto-Claim] ${telegramId}: Failed to claim staking rewards - ${result.error}`);
