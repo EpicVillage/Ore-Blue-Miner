@@ -224,15 +224,6 @@ export async function swapUserOrbToSol(
       }
     }
 
-    // Check remaining ORB after swap
-    const remainingOrb = balances.orb - amount;
-    if (remainingOrb < settings.min_orb_to_keep) {
-      return {
-        success: false,
-        error: `Cannot swap: would leave ${remainingOrb.toFixed(2)} ORB (minimum is ${settings.min_orb_to_keep} ORB)`
-      };
-    }
-
     // Get quote
     const quote = await getSwapQuote(amount, settings.slippage_bps);
     if (!quote) {
