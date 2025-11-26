@@ -8,7 +8,6 @@ A fully automated, multi-user Telegram bot for ORB/Ore.blue mining on Solana. Ea
 - **HMAC-SHA256 encryption** - All private keys encrypted in database with tamper detection
 - **User isolation** - Each user's wallet and data completely separate
 - **No key exposure** - Private keys never logged or displayed in plain text
-- **Multi-wallet support** - Import and manage multiple wallets per user
 
 ### ⚡ Automated Mining
 - **Auto-deploy** - Automatically deploy SOL to mining rounds
@@ -27,29 +26,12 @@ A fully automated, multi-user Telegram bot for ORB/Ore.blue mining on Solana. Ea
 - **Manual operations** - Deploy, claim, stake on-demand
 - **Status dashboard** - Current round, claimable rewards, prices
 
-## ⚠️ DISCLAIMER
-
-**USE AT YOUR OWN RISK**
-
-This software handles cryptocurrency transactions on the Solana blockchain.
-
-- ❌ **NO WARRANTY** - Software provided "AS IS" without any guarantees
-- ⚠️ **RISK OF LOSS** - You may lose funds due to bugs, network issues, or market conditions
-- 🚫 **NOT FINANCIAL ADVICE** - This is a tool, not investment advice
-- 🧪 **TEST FIRST** - Start with small amounts to understand how it works
-- 🔐 **USE A FRESH WALLET** - We strongly recommend creating a new wallet specifically for this bot to protect your main funds from potential bugs or vulnerabilities
-- 💰 **1% DEV FEE** - All deployment transactions include a 1% service fee
-
-By using this bot, you acknowledge and accept these risks.
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ## Usage
 
 ### User Commands
 
 **Wallet & Status:**
-- `/start` - Setup wallet (create new or import existing)
+- `/start` - Setup wallet (import private key)
 - `/wallet` - Manage your wallet
 - `/status` - View dashboard with balances, rewards, and round info
 
@@ -136,3 +118,18 @@ Users can customize via `/settings`:
 ## Support
 
 For issues or questions, contact the developer.
+
+## ⚠️ DISCLAIMER
+
+**USE AT YOUR OWN RISK**
+
+This software handles cryptocurrency transactions on the Solana blockchain.
+
+- 🚫 **NOT FINANCIAL ADVICE** - This is a tool, not investment advice
+- 🧪 **TEST FIRST** - Start with small amounts to understand how it works
+- 🔐 **USE A FRESH WALLET** - We strongly recommend creating a new wallet specifically for this bot to protect your main funds from potential bugs or vulnerabilities
+- 💰 **1% DEV FEE** - All deployment transactions include a 1% service fee
+
+By using this bot, you acknowledge and accept these risks.
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
