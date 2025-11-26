@@ -22,7 +22,8 @@ import { initializeUserBalanceHistoryTable } from './utils/userPnL';
 import {
   getUserBalances,
   validatePrivateKey,
-  getUserWallet
+  getUserWallet,
+  generateSolanaWallet
 } from './utils/userWallet';
 import {
   getUserAutomationStatus,
@@ -621,6 +622,80 @@ class OrbMiningBot {
       await this.handleWallet(ctx, true);
     });
 
+    // Generate new wallet during onboarding
+    this.bot.action('generate_wallet', async (ctx) => {
+      await ctx.answerCbQuery();
+      const telegramId = ctx.from!.id.toString();
+      const username = ctx.from!.username;
+
+      try {
+        // Generate new wallet
+        const { privateKeyBase58, publicKey } = generateSolanaWallet();
+
+        // Save to database
+        await saveUser(telegramId, privateKeyBase58, publicKey, username);
+
+        // Show private key with strong warning
+        await ctx.editMessageText(
+          `✅ *Wallet Generated Successfully!*
+
+📍 *Public Key:*
+\`${publicKey}\`
+
+🔐 *Private Key (SAVE THIS NOW):*
+\`${privateKeyBase58}\`
+
+⚠️ *CRITICAL - READ CAREFULLY:*
+• Copy and save this private key somewhere secure
+• This is the *ONLY* time it will be shown
+• Anyone with this key controls your funds
+• We cannot recover it if lost
+• Never share it with anyone
+
+Once you've saved it, click the button below to continue.`,
+          {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '✅ I\'ve Saved My Private Key', callback_data: 'confirm_key_saved' }]
+              ]
+            }
+          }
+        );
+      } catch (error) {
+        logger.error('[Telegram] Error generating wallet:', error);
+        await ctx.reply('Failed to generate wallet. Please try again with /start');
+      }
+    });
+
+    // Confirm key saved - show main menu
+    this.bot.action('confirm_key_saved', async (ctx) => {
+      await ctx.answerCbQuery('Welcome to ORB Mining!');
+      await this.handleStart(ctx);
+    });
+
+    // Import existing wallet during onboarding
+    this.bot.action('import_wallet', async (ctx) => {
+      await ctx.answerCbQuery();
+      const userId = ctx.from!.id;
+      const session = this.getSession(userId);
+      session.awaitingPrivateKey = true;
+
+      await ctx.editMessageText(
+        `📥 *Import Existing Wallet*
+
+Please send me your Solana wallet *private key* (base58 format).
+
+⚠️ *Security Notes:*
+• Your message will be deleted immediately after processing
+• The private key is encrypted before storage
+• Only use a wallet you're comfortable experimenting with
+
+Send your private key now, or use /cancel to abort.`,
+        { parse_mode: 'Markdown' }
+      );
+    });
+
     // Change wallet - delete current and restart onboarding
     this.bot.action('change_wallet', async (ctx) => {
       await ctx.answerCbQuery();
@@ -1081,25 +1156,32 @@ Use the buttons below or type a command to get started.`;
    * Show onboarding flow for new users
    */
   private async showOnboarding(ctx: BotContext) {
-    const userId = ctx.from!.id;
-    const session = this.getSession(userId);
-    session.awaitingPrivateKey = true;
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: '🆕 Generate New Wallet', callback_data: 'generate_wallet' }],
+        [{ text: '📥 Import Existing Wallet', callback_data: 'import_wallet' }],
+      ],
+    };
 
     await ctx.reply(
       `👋 *Welcome to ORB Mining Bot!*
 
-This is a bot to help mine ore.blue tokens.
+This bot helps you mine ore.blue tokens.
 
-To get started, please send me your Solana wallet *private key*.
+To get started, choose an option below:
+
+🆕 *Generate New Wallet* - Create a fresh Solana wallet
+📥 *Import Existing Wallet* - Use your own private key
 
 ⚠️ *IMPORTANT Notes:*
 • This bot is made as a casual project
 • Use a FRESH wallet only - do NOT connect a wallet with other positions or significant funds
 • Only use a wallet you're comfortable experimenting with
-• You can remove your wallet anytime with /wallet
-
-Send your private key now, or use /cancel to abort.`,
-      { parse_mode: 'Markdown' }
+• You can remove your wallet anytime with /wallet`,
+      {
+        parse_mode: 'Markdown',
+        reply_markup: keyboard,
+      }
     );
   }
 

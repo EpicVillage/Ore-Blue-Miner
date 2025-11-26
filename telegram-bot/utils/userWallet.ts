@@ -12,6 +12,22 @@ import logger from '../../src/utils/logger';
  */
 
 /**
+ * Generate a new Solana wallet
+ * Returns the keypair, base58-encoded private key, and public key
+ */
+export function generateSolanaWallet(): {
+  keypair: Keypair;
+  privateKeyBase58: string;
+  publicKey: string;
+} {
+  const keypair = Keypair.generate();
+  const privateKeyBase58 = bs58.encode(keypair.secretKey);
+  const publicKey = keypair.publicKey.toBase58();
+
+  return { keypair, privateKeyBase58, publicKey };
+}
+
+/**
  * Get wallet keypair for a user
  */
 export async function getUserWallet(telegramId: string): Promise<Keypair | null> {
