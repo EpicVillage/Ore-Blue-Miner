@@ -6,7 +6,7 @@ A fully automated, multi-user Telegram bot for ORB/Ore.blue mining on Solana. Ea
 
 ### 🔐 Multi-User Support
 - **Separate wallets per user** - Each Telegram user has their own encrypted wallet
-- **AES-256-GCM encryption** - All private keys encrypted in database
+- **HMAC-SHA256 encryption** - All private keys encrypted in database with HMAC validation
 - **Easy wallet management** - Create new wallets or import existing ones via Telegram
 
 ### ⚡ Automated Mining
@@ -111,8 +111,9 @@ SQLite database stores:
 
 ## Security
 
-- **Encrypted storage** - All private keys encrypted with AES-256-GCM
-- **Machine-specific keys** - Encryption uses machine hostname + private key
+- **HMAC-based encryption** - All private keys encrypted using HMAC-SHA256
+- **Tamper detection** - HMAC validation ensures encrypted data hasn't been modified
+- **Secure key derivation** - Encryption derived from TELEGRAM_ENCRYPTION_KEY in .env
 - **No key exposure** - Private keys never logged or displayed
 - **User isolation** - Each user's data completely separate
 
