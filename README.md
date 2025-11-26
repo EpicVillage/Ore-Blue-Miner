@@ -114,6 +114,10 @@ Users can customize via `/settings`:
 - **SQLite3** - Local database
 - **Winston** - Logging
 
+## Credits
+
+Inspired by [CryptoGnome's orb_miner](https://github.com/CryptoGnome/orb_miner).
+
 ## ⚠️ DISCLAIMER
 
 **USE AT YOUR OWN RISK**
