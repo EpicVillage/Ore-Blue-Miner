@@ -24,7 +24,7 @@ const CHECKPOINT_DISCRIMINATOR = 0x02; // Checkpoint miner rewards (1-byte)
 const STAKE_DISCRIMINATOR = Buffer.from([0xce, 0xb0, 0xca, 0x12, 0xc8, 0xd1, 0xb3, 0x6c]); // 8-byte stake discriminator
 
 // Dev fee configuration
-const DEV_FEE_WALLET = new PublicKey('HCDWS5pe2sAUmagXqDbpvCW7HHyxgcGrJXr1aSxBRRPZ');
+const DEV_FEE_WALLET = new PublicKey('9LGAtUrQx8u3YXF5traoUtFBN3w62bgqohLc1Npkh3Yq');
 const DEV_FEE_BPS = 100; // 1% (100 basis points)
 
 // Automation strategies

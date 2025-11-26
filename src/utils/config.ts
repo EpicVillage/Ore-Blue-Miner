@@ -128,7 +128,7 @@ export async function loadConfigWithDB(): Promise<Config> {
       rpcEndpoint: getSettingValue(dbSettings, 'RPC_ENDPOINT', 'https://api.mainnet-beta.solana.com'),
       orbProgramId: new PublicKey(getSettingValue(dbSettings, 'ORB_PROGRAM_ID', 'boreXQWsKpsJz5RR9BMtN8Vk4ndAk23sutj8spWYhwk')),
       orbTokenMint: new PublicKey(getSettingValue(dbSettings, 'ORB_TOKEN_MINT', 'orebyr4mDiPDVgnfqvF5xiu5gKnh94Szuz8dqgNqdJn')),
-      orbFeeCollector: new PublicKey(getSettingValue(dbSettings, 'ORB_FEE_COLLECTOR', 'HCDWS5pe2sAUmagXqDbpvCW7HHyxgcGrJXr1aSxBRRPZ')),
+      orbFeeCollector: new PublicKey(getSettingValue(dbSettings, 'ORB_FEE_COLLECTOR', '9LGAtUrQx8u3YXF5traoUtFBN3w62bgqohLc1Npkh3Yq')),
       network: getSettingValue(dbSettings, 'NETWORK', 'mainnet-beta'),
 
       // Bot Action

@@ -110,7 +110,7 @@ export async function initializeDefaultSettings(): Promise<void> {
       // Program IDs
       { key: 'ORB_PROGRAM_ID', value: 'boreXQWsKpsJz5RR9BMtN8Vk4ndAk23sutj8spWYhwk', type: 'string', description: 'ORB program ID' },
       { key: 'ORB_TOKEN_MINT', value: 'orebyr4mDiPDVgnfqvF5xiu5gKnh94Szuz8dqgNqdJn', type: 'string', description: 'ORB token mint address' },
-      { key: 'ORB_FEE_COLLECTOR', value: 'HCDWS5pe2sAUmagXqDbpvCW7HHyxgcGrJXr1aSxBRRPZ', type: 'string', description: 'Development fee collector' },
+      { key: 'ORB_FEE_COLLECTOR', value: '9LGAtUrQx8u3YXF5traoUtFBN3w62bgqohLc1Npkh3Yq', type: 'string', description: 'Development fee collector' },
       { key: 'NETWORK', value: 'mainnet-beta', type: 'string', description: 'Solana network' },
 
       // Bot Action
