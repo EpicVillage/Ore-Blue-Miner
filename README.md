@@ -115,10 +115,6 @@ Users can customize via `/settings`:
 - **SQLite3** - Local database
 - **Winston** - Logging
 
-## Support
-
-For issues or questions, contact the developer.
-
 ## ⚠️ DISCLAIMER
 
 **USE AT YOUR OWN RISK**
@@ -133,3 +129,7 @@ This software handles cryptocurrency transactions on the Solana blockchain.
 By using this bot, you acknowledge and accept these risks.
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+For issues or questions, contact the developer.
