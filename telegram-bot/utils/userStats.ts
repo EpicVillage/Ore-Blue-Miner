@@ -184,3 +184,61 @@ export function formatTransactionForDisplay(tx: any): string {
 
   return details;
 }
+
+/**
+ * Get global platform-wide statistics
+ */
+export async function getGlobalStats(): Promise<{
+  totalUsers: number;
+  activeUsers24h: number;
+  totalDeployments: number;
+  totalVolumeSol: number;
+  avgSolPerUser: number;
+}> {
+  try {
+    // Get total users
+    const userCount = await getQuery<{ count: number }>(`
+      SELECT COUNT(*) as count FROM telegram_users
+    `);
+    const totalUsers = userCount?.count || 0;
+
+    // Get active users in last 24 hours
+    const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+    const activeUsers = await getQuery<{ count: number }>(`
+      SELECT COUNT(*) as count FROM telegram_users
+      WHERE last_active >= ?
+    `, [oneDayAgo]);
+    const activeUsers24h = activeUsers?.count || 0;
+
+    // Get total deployments and volume
+    const deployStats = await getQuery<{ count: number; volume: number }>(`
+      SELECT
+        COUNT(*) as count,
+        COALESCE(SUM(sol_amount), 0) as volume
+      FROM transactions
+      WHERE type = 'deploy' AND status = 'success'
+    `);
+    const totalDeployments = deployStats?.count || 0;
+    const totalVolumeSol = deployStats?.volume || 0;
+
+    // Calculate average SOL per user
+    const avgSolPerUser = totalUsers > 0 ? totalVolumeSol / totalUsers : 0;
+
+    return {
+      totalUsers,
+      activeUsers24h,
+      totalDeployments,
+      totalVolumeSol,
+      avgSolPerUser,
+    };
+  } catch (error) {
+    logger.error('[Global Stats] Failed to get global stats:', error);
+    return {
+      totalUsers: 0,
+      activeUsers24h: 0,
+      totalDeployments: 0,
+      totalVolumeSol: 0,
+      avgSolPerUser: 0,
+    };
+  }
+}

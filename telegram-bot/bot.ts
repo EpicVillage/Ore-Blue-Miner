@@ -35,7 +35,8 @@ import {
   getUserPerformanceStats,
   getUserMiningStats,
   getUserClaimStats,
-  formatTransactionForDisplay
+  formatTransactionForDisplay,
+  getGlobalStats
 } from './utils/userStats';
 import {
   getUserSettings,
@@ -479,6 +480,7 @@ class OrbMiningBot {
 <b>📊 Analytics & History:</b>
 /stats - Complete analytics
 /history - Transaction history
+/global - Platform-wide statistics
 
 <b>🏦 Staking:</b>
 /stake - View stake & rewards`,
@@ -508,6 +510,11 @@ class OrbMiningBot {
     // History command - transaction history
     this.bot.command('history', async (ctx) => {
       await this.handleHistory(ctx);
+    });
+
+    // Global command - platform-wide statistics
+    this.bot.command('global', async (ctx) => {
+      await this.handleGlobal(ctx);
     });
 
     // Settings command - view settings
@@ -822,6 +829,23 @@ This action cannot be undone.`;
 
       await ctx.answerCbQuery('Refreshing...');
       await this.handleControl(ctx, true);
+    });
+
+    this.bot.action('refresh_global', async (ctx) => {
+      const userId = ctx.from!.id;
+      const now = Date.now();
+      const lastRefresh = this.lastRefreshTime.get(userId) || 0;
+      const cooldown = 5000; // 5 seconds cooldown
+
+      if (now - lastRefresh < cooldown) {
+        const remainingSeconds = Math.ceil((cooldown - (now - lastRefresh)) / 1000);
+        await ctx.answerCbQuery(`Please wait ${remainingSeconds}s before refreshing again`, { show_alert: false });
+        return;
+      }
+
+      this.lastRefreshTime.set(userId, now);
+      await ctx.answerCbQuery('Refreshing...');
+      await this.handleGlobal(ctx, true);
     });
 
     // Logs pagination handlers
@@ -1560,6 +1584,52 @@ Generated: ${new Date().toLocaleString()}`;
     } catch (error) {
       logger.error('[Telegram] Error in handleStats:', error);
       await ctx.reply('Failed to fetch stats. Please try again.');
+    }
+  }
+
+  /**
+   * Handle /global command - platform-wide statistics
+   */
+  private async handleGlobal(ctx: BotContext, edit: boolean = false) {
+    try {
+      const stats = await getGlobalStats();
+
+      const message = `🌍 *Global Platform Statistics*
+
+*Users:*
+• Total Users: ${stats.totalUsers}
+• Active (24h): ${stats.activeUsers24h}
+
+*Deployments:*
+• Total Deployments: ${stats.totalDeployments.toLocaleString()}
+• Total Volume: ${formatSOL(stats.totalVolumeSol)}
+
+*Averages:*
+• Avg SOL/User: ${formatSOL(stats.avgSolPerUser)}
+
+_Updated: ${new Date().toLocaleString()}_`;
+
+      const keyboard = {
+        inline_keyboard: [
+          [{ text: '🔄 Refresh', callback_data: 'refresh_global' }],
+          [{ text: '🏠 Main Menu', callback_data: 'start' }]
+        ],
+      };
+
+      if (edit && ctx.callbackQuery && ctx.callbackQuery.message) {
+        await ctx.editMessageText(message, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard,
+        });
+      } else {
+        await ctx.reply(message, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard,
+        });
+      }
+    } catch (error) {
+      logger.error('[Telegram] Error in handleGlobal:', error);
+      await ctx.reply('Failed to fetch global stats. Please try again.');
     }
   }
 
