@@ -26,6 +26,23 @@ A fully automated, multi-user Telegram bot for ORB/Ore.blue mining on Solana. Ea
 - **Manual operations** - Deploy, claim, stake on-demand
 - **Status dashboard** - Current round, claimable rewards, prices
 
+## ⚠️ DISCLAIMER
+
+**USE AT YOUR OWN RISK**
+
+This software handles cryptocurrency transactions on the Solana blockchain.
+
+- ❌ **NO WARRANTY** - Software provided "AS IS" without any guarantees
+- ⚠️ **RISK OF LOSS** - You may lose funds due to bugs, network issues, or market conditions
+- 🚫 **NOT FINANCIAL ADVICE** - This is a tool, not investment advice
+- 🧪 **TEST FIRST** - Start with small amounts to understand how it works
+- 🔐 **USE A FRESH WALLET** - We strongly recommend creating a new wallet specifically for this bot to protect your main funds from potential bugs or vulnerabilities
+- 💰 **1% DEV FEE** - All deployment transactions include a 1% service fee
+
+By using this bot, you acknowledge and accept these risks.
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
 ## Usage
 
 ### User Commands
@@ -101,7 +118,9 @@ SQLite database stores:
 
 ## Dev Fees
 
-- **1% service fee** on deploy/auto-deploy transactions
+- **1% service fee** on all deploy/auto-deploy transactions
+- Fee wallet: `9LGAtUrQx8u3YXF5traoUtFBN3w62bgqohLc1Npkh3Yq`
+- Helps support continued development and maintenance of this community tool
 
 ## Configuration
 
