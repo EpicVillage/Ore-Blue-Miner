@@ -917,7 +917,8 @@ This action cannot be undone.`;
         const match = ctx.match;
         const categoryKey = match[1];
         const settingKey = match[2];
-        const telegramId = ctx.from!.id.toString();
+        const userId = ctx.from!.id;
+        const telegramId = userId.toString();
 
         const settings = await getUserSettings(telegramId);
         const definition = getSettingDefinition(categoryKey, settingKey);
@@ -928,6 +929,30 @@ This action cannot be undone.`;
         }
 
         const currentValue = settings[definition.key];
+
+        // For numeric types, skip the intermediate screen and go directly to input prompt
+        if (definition.type === 'number') {
+          const session = this.getSession(userId);
+          session.awaitingSettingInput = { categoryKey, settingKey };
+
+          let rangeInfo = '';
+          if (definition.min !== undefined || definition.max !== undefined) {
+            rangeInfo = `\n*Valid range:* ${definition.min || 0} - ${definition.max || '∞'} ${definition.unit || ''}`;
+          }
+
+          await ctx.editMessageText(
+            `📝 *${definition.name}*\n\n${definition.description}\n\n*Current:* ${currentValue} ${definition.unit || ''}${rangeInfo}\n\nSend the new value, or use /cancel to abort.`,
+            {
+              parse_mode: 'Markdown',
+              reply_markup: {
+                inline_keyboard: [[{ text: '⬅️ Back', callback_data: `settings_cat_${categoryKey}` }]]
+              }
+            }
+          );
+          return;
+        }
+
+        // For boolean/other types, show the toggle/options keyboard
         const message = formatSettingMessage(categoryKey, settingKey, currentValue, definition);
         const keyboard = getSettingEditKeyboard(categoryKey, settingKey, currentValue, definition);
 
