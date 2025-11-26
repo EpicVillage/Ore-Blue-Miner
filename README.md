@@ -95,7 +95,6 @@ SQLite database stores:
 ## Dev Fees
 
 - **1% service fee** on all deploy/auto-deploy transactions
-- Fee wallet: `9LGAtUrQx8u3YXF5traoUtFBN3w62bgqohLc1Npkh3Yq`
 - Helps support continued development and maintenance of this community tool
 
 ## Configuration
