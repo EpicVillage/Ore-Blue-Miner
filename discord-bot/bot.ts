@@ -908,6 +908,11 @@ class OrbMiningDiscordBot {
       .setDescription('Select a category to configure:')
       .addFields(
         {
+          name: 'Mining',
+          value: `Motherload: \`${settings.motherload_threshold} ORB\` | Budget: \`${settings.automation_budget_percent}%\`\nSOL/Block: \`${settings.sol_per_block}\` | Blocks: \`${settings.num_blocks}\``,
+          inline: true,
+        },
+        {
           name: 'Swap',
           value: `Auto-Swap: \`${settings.auto_swap_enabled ? 'ON' : 'OFF'}\` @ \`${settings.swap_threshold} ORB\``,
           inline: true,
@@ -922,17 +927,16 @@ class OrbMiningDiscordBot {
           value: `Auto-Transfer: \`${settings.auto_transfer_enabled ? 'ON' : 'OFF'}\``,
           inline: true,
         },
-        {
-          name: 'Mining',
-          value: `Motherload: \`${settings.motherload_threshold} ORB\` | Budget: \`${settings.automation_budget_percent}%\``,
-          inline: true,
-        },
       )
       .setFooter({ text: 'Click a button below to configure that category' });
   }
 
   private buildSettingsMainComponents(): ActionRowBuilder<ButtonBuilder>[] {
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId('s2_cat_mining')
+        .setLabel('Mining')
+        .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
         .setCustomId('s2_cat_swap')
         .setLabel('Swap')
@@ -944,10 +948,6 @@ class OrbMiningDiscordBot {
       new ButtonBuilder()
         .setCustomId('s2_cat_transfer')
         .setLabel('Transfer')
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId('s2_cat_mining')
-        .setLabel('Mining')
         .setStyle(ButtonStyle.Primary),
     );
     return [row];
