@@ -2,7 +2,7 @@
 
 A fully automated, multi-user bot for ORB/Ore.blue mining on Solana. Each user manages their own wallet with encrypted storage, automated mining, auto-claim, auto-transfer, and comprehensive analytics.
 
-[![Add to Discord](https://img.shields.io/badge/Add%20to-Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com/oauth2/authorize?client_id=1443440072673329233&permissions=2147567616&integration_type=1&scope=bot+applications.commands)
+[![Discord Bot](https://img.shields.io/badge/Discord-Bot-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com/oauth2/authorize?client_id=1443440072673329233&permissions=2147567616&integration_type=1&scope=bot+applications.commands)
 [![Telegram Bot](https://img.shields.io/badge/Telegram-Bot-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/blueore_bot)
 
 ## Features
