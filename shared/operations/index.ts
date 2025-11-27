@@ -16,6 +16,9 @@ import {
   getUserSettings
 } from '../database';
 
+// Re-export automation operations
+export * from './automation';
+
 /**
  * Shared Blockchain Operations
  *
