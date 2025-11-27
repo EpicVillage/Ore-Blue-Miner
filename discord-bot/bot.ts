@@ -61,6 +61,11 @@ import {
 import { getOrbPrice } from '../src/utils/jupiter';
 import { fetchMiner, fetchStake, fetchBoard, fetchRound } from '../src/utils/accounts';
 import { loadAndCacheConfig } from '../src/utils/config';
+import {
+  getUserRecentRounds,
+  getUserRoundStats,
+  UserRound,
+} from '../telegram-bot/utils/userRounds';
 
 const PLATFORM: Platform = 'discord';
 
@@ -121,6 +126,10 @@ const commands = [
   new SlashCommandBuilder()
     .setName('settings')
     .setDescription('View and manage your settings'),
+
+  new SlashCommandBuilder()
+    .setName('rounds')
+    .setDescription('View current round and your round history'),
 
   new SlashCommandBuilder()
     .setName('link')
@@ -222,6 +231,7 @@ class OrbMiningDiscordBot {
       case 'deploy': await this.handleDeploy(interaction); break;
       case 'swap': await this.handleSwap(interaction); break;
       case 'settings': await this.handleSettings(interaction); break;
+      case 'rounds': await this.handleRounds(interaction); break;
       case 'link': await this.handleLink(interaction); break;
       case 'help': await this.handleHelp(interaction); break;
       default:
@@ -256,6 +266,7 @@ class OrbMiningDiscordBot {
       case 's2_back': await this.handleSettingsBack(interaction); break;
       case 's2_toggle': await this.handleSettingsToggle(interaction, params.join(':')); break;
       case 's2_custom': await this.showSettingsCustomModal(interaction, params.join(':')); break;
+      case 'refresh_rounds': await this.handleRoundsRefresh(interaction); break;
       default:
         await interaction.reply({ content: 'Unknown action', ephemeral: true });
     }
@@ -875,6 +886,197 @@ class OrbMiningDiscordBot {
     } catch (error) {
       logger.error('[Discord] Error in swap:', error);
       await interaction.editReply({ embeds: [formatErrorEmbed('Error', 'Failed to swap.')] });
+    }
+  }
+
+  // ==================== ROUNDS ====================
+  private async handleRounds(interaction: ChatInputCommandInteraction) {
+    const discordId = interaction.user.id;
+    if (!(await this.isUserRegistered(discordId))) {
+      return interaction.reply({
+        embeds: [formatErrorEmbed('Not Registered', 'Use `/start` first.')],
+        ephemeral: true,
+      });
+    }
+
+    await interaction.deferReply();
+
+    try {
+      // Fetch current round info from blockchain
+      const board = await fetchBoard();
+      const currentRoundId = Number(board.roundId);
+      const round = await fetchRound(board.roundId);
+      const motherlode = Number(round.motherload) / 1e9;
+
+      // Build embed
+      const embed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle('Mining Rounds')
+        .addFields(
+          { name: 'Current Round', value: `\`#${currentRoundId}\``, inline: true },
+          { name: 'Motherload', value: `\`${formatORB(motherlode)}\``, inline: true },
+        );
+
+      // Check if user is linked to Telegram to show round history
+      const linked = await getLinkedAccount(PLATFORM, discordId);
+      if (linked?.linked_at && linked?.telegram_id) {
+        // User is linked - fetch their round history from Telegram data
+        try {
+          const rounds = await getUserRecentRounds(linked.telegram_id, 10);
+          const stats = await getUserRoundStats(linked.telegram_id);
+
+          if (rounds.length > 0) {
+            // Format recent rounds
+            const roundsList = rounds.slice(0, 5).map(r => {
+              let status = '⏳';
+              if (r.winning_square >= 0) {
+                status = r.hit ? '✅' : '❌';
+              }
+              const squares = r.deployed_squares.map(ds => ds.square + 1).join(', ');
+              return `${status} **#${r.round_id}** - ${formatSOL(r.deployed_sol)} ${squares ? `(Sq: ${squares})` : ''}`;
+            }).join('\n');
+
+            embed.addFields({
+              name: 'Recent Rounds',
+              value: roundsList || 'No rounds yet',
+              inline: false,
+            });
+
+            // Add stats
+            if (stats.totalRounds > 0) {
+              embed.addFields({
+                name: 'Statistics',
+                value: `Rounds: \`${stats.totalRounds}\` | Hits: \`${stats.totalWins}\` | Rate: \`${stats.winRate.toFixed(1)}%\``,
+                inline: false,
+              });
+            }
+          } else {
+            embed.addFields({
+              name: 'Recent Rounds',
+              value: 'No rounds participated yet.',
+              inline: false,
+            });
+          }
+        } catch (error) {
+          logger.error('[Discord] Error fetching round history:', error);
+          embed.addFields({
+            name: 'Round History',
+            value: 'Unable to fetch round history.',
+            inline: false,
+          });
+        }
+      } else {
+        embed.addFields({
+          name: 'Round History',
+          value: 'Link your Telegram account with `/link` to see your round history.',
+          inline: false,
+        });
+      }
+
+      embed.setFooter({ text: '✅ = Hit | ❌ = Missed | ⏳ = Pending' });
+
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId('refresh_rounds')
+          .setLabel('Refresh')
+          .setStyle(ButtonStyle.Secondary),
+      );
+
+      await interaction.editReply({ embeds: [embed], components: [row] });
+    } catch (error) {
+      logger.error('[Discord] Error in rounds:', error);
+      await interaction.editReply({ embeds: [formatErrorEmbed('Error', 'Failed to fetch round info.')] });
+    }
+  }
+
+  private async handleRoundsRefresh(interaction: ButtonInteraction) {
+    const discordId = interaction.user.id;
+    if (!(await this.isUserRegistered(discordId))) {
+      return interaction.reply({
+        embeds: [formatErrorEmbed('Not Registered', 'Use `/start` first.')],
+        ephemeral: true,
+      });
+    }
+
+    await interaction.deferUpdate();
+
+    try {
+      const board = await fetchBoard();
+      const currentRoundId = Number(board.roundId);
+      const round = await fetchRound(board.roundId);
+      const motherlode = Number(round.motherload) / 1e9;
+
+      const embed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle('Mining Rounds')
+        .addFields(
+          { name: 'Current Round', value: `\`#${currentRoundId}\``, inline: true },
+          { name: 'Motherload', value: `\`${formatORB(motherlode)}\``, inline: true },
+        );
+
+      const linked = await getLinkedAccount(PLATFORM, discordId);
+      if (linked?.linked_at && linked?.telegram_id) {
+        try {
+          const rounds = await getUserRecentRounds(linked.telegram_id, 10);
+          const stats = await getUserRoundStats(linked.telegram_id);
+
+          if (rounds.length > 0) {
+            const roundsList = rounds.slice(0, 5).map(r => {
+              let status = '⏳';
+              if (r.winning_square >= 0) {
+                status = r.hit ? '✅' : '❌';
+              }
+              const squares = r.deployed_squares.map(ds => ds.square + 1).join(', ');
+              return `${status} **#${r.round_id}** - ${formatSOL(r.deployed_sol)} ${squares ? `(Sq: ${squares})` : ''}`;
+            }).join('\n');
+
+            embed.addFields({
+              name: 'Recent Rounds',
+              value: roundsList || 'No rounds yet',
+              inline: false,
+            });
+
+            if (stats.totalRounds > 0) {
+              embed.addFields({
+                name: 'Statistics',
+                value: `Rounds: \`${stats.totalRounds}\` | Hits: \`${stats.totalWins}\` | Rate: \`${stats.winRate.toFixed(1)}%\``,
+                inline: false,
+              });
+            }
+          } else {
+            embed.addFields({
+              name: 'Recent Rounds',
+              value: 'No rounds participated yet.',
+              inline: false,
+            });
+          }
+        } catch (error) {
+          embed.addFields({
+            name: 'Round History',
+            value: 'Unable to fetch round history.',
+            inline: false,
+          });
+        }
+      } else {
+        embed.addFields({
+          name: 'Round History',
+          value: 'Link your Telegram account with `/link` to see your round history.',
+          inline: false,
+        });
+      }
+
+      embed.setFooter({ text: '✅ = Hit | ❌ = Missed | ⏳ = Pending' });
+
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId('refresh_rounds')
+          .setLabel('Refresh')
+          .setStyle(ButtonStyle.Secondary),
+      );
+
+      await interaction.editReply({ embeds: [embed], components: [row] });
+    } catch (error) {
+      logger.error('[Discord] Error refreshing rounds:', error);
     }
   }
 
