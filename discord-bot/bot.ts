@@ -47,6 +47,7 @@ import {
 } from './utils/embeds';
 import { getOrbPrice } from '../src/utils/jupiter';
 import { fetchMiner, fetchStake, fetchBoard, fetchRound } from '../src/utils/accounts';
+import { loadConfigWithDB } from '../src/utils/config';
 
 /**
  * ORB Mining Discord Bot
@@ -907,6 +908,10 @@ class OrbMiningDiscordBot {
       await initializeDiscordUsersTable();
       await initializeDiscordSettingsTable();
       logger.info('[Discord] Database initialized');
+
+      // Load config
+      await loadConfigWithDB();
+      logger.info('[Discord] Configuration loaded');
 
       // Register commands
       await this.registerCommands();
