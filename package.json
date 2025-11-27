@@ -6,7 +6,12 @@
   "scripts": {
     "setup": "npm install",
     "start": "ts-node --transpile-only telegram-bot/bot.ts",
+    "start:telegram": "ts-node --transpile-only telegram-bot/bot.ts",
+    "start:discord": "ts-node --transpile-only discord-bot/bot.ts",
+    "start:all": "concurrently \"npm run start:telegram\" \"npm run start:discord\"",
     "dev": "nodemon --exec ts-node --transpile-only telegram-bot/bot.ts",
+    "dev:telegram": "nodemon --exec ts-node --transpile-only telegram-bot/bot.ts",
+    "dev:discord": "nodemon --exec ts-node --transpile-only discord-bot/bot.ts",
     "build": "tsc",
     "clean": "rm -rf dist"
   },
@@ -28,6 +33,7 @@
     "@types/sqlite3": "^5.1.0",
     "axios": "^1.7.2",
     "bs58": "^5.0.0",
+    "discord.js": "^14.25.1",
     "dotenv": "^16.6.1",
     "open": "^9.1.0",
     "sqlite3": "^5.1.7",
