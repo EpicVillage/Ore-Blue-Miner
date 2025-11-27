@@ -14,7 +14,7 @@ import logger from '../../src/utils/logger';
 import { getOrbPrice } from '../../src/utils/jupiter';
 import { getUserSettings } from './userSettings';
 import { getUserWallet } from './userWallet';
-import { recordUserRound } from './userRounds';
+import { recordUserRound, getUserDeployedSquares } from './userRounds';
 
 /**
  * Automation Executor Service for Telegram Bot Users
@@ -333,14 +333,16 @@ async function executeUserAutomation(
       logger.debug(`[Auto-Executor] Failed to record transaction for user ${telegramId}:`, error);
     }
 
-    // Record user round participation
+    // Record user round participation with deployed squares
     try {
+      const deployedSquares = await getUserDeployedSquares(telegramId);
       await recordUserRound(
         telegramId,
         board.roundId.toNumber(),
         currentMotherload,
         solPerRound,
-        settings.num_blocks
+        deployedSquares.length,
+        deployedSquares
       );
     } catch (error) {
       logger.debug(`[Auto-Executor] Failed to record round for user ${telegramId}:`, error);

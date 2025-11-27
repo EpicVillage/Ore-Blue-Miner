@@ -488,6 +488,7 @@ class OrbMiningBot {
 <b>📊 Analytics & History:</b>
 /stats - Complete analytics
 /history - Transaction history
+/rounds - Round history (hit/miss)
 /global - Platform-wide statistics
 
 <b>🏦 Staking:</b>
@@ -518,6 +519,11 @@ class OrbMiningBot {
     // History command - transaction history
     this.bot.command('history', async (ctx) => {
       await this.handleHistory(ctx);
+    });
+
+    // Rounds command - round history with hit/miss
+    this.bot.command('rounds', async (ctx) => {
+      await this.handleRounds(ctx);
     });
 
     // Global command - platform-wide statistics
@@ -854,6 +860,23 @@ This action cannot be undone.`;
       this.lastRefreshTime.set(userId, now);
       await ctx.answerCbQuery('Refreshing...');
       await this.handleGlobal(ctx, true);
+    });
+
+    this.bot.action('refresh_rounds', async (ctx) => {
+      const userId = ctx.from!.id;
+      const now = Date.now();
+      const lastRefresh = this.lastRefreshTime.get(userId) || 0;
+      const cooldown = 5000; // 5 seconds cooldown
+
+      if (now - lastRefresh < cooldown) {
+        const remainingSeconds = Math.ceil((cooldown - (now - lastRefresh)) / 1000);
+        await ctx.answerCbQuery(`Please wait ${remainingSeconds}s before refreshing again`, { show_alert: false });
+        return;
+      }
+
+      this.lastRefreshTime.set(userId, now);
+      await ctx.answerCbQuery('Refreshing...');
+      await this.handleRounds(ctx, true);
     });
 
     // Logs pagination handlers
@@ -1773,6 +1796,57 @@ Auto-claim features are coming soon for multi-user support.`;
   }
 
   /**
+   * Handle /rounds command - round history with hit/miss
+   */
+  private async handleRounds(ctx: BotContext, edit: boolean = false) {
+    const telegramId = ctx.from!.id.toString();
+
+    if (!(await this.isUserRegistered(telegramId))) {
+      await ctx.reply('Please use /start to connect your wallet first.');
+      return;
+    }
+
+    try {
+      await updateLastActive(telegramId);
+
+      // Get recent rounds (last 10)
+      const rounds = await getUserRecentRounds(telegramId, 10);
+      const stats = await getUserRoundStats(telegramId);
+
+      let message = formatRecentRoundsDisplay(rounds);
+
+      // Add summary stats
+      if (stats.totalRounds > 0) {
+        message += `\n\n📊 *Summary*\n`;
+        message += `Rounds: ${stats.totalRounds} | Hits: ${stats.totalWins} | Rate: ${stats.winRate.toFixed(1)}%`;
+      }
+
+      const keyboard = {
+        inline_keyboard: [
+          [{ text: '🔄 Refresh', callback_data: 'refresh_rounds' }],
+          [{ text: '📊 Full Stats', callback_data: 'stats' }],
+          [{ text: '🏠 Main Menu', callback_data: 'start' }]
+        ],
+      };
+
+      if (edit && ctx.callbackQuery && ctx.callbackQuery.message) {
+        await ctx.editMessageText(message, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard,
+        });
+      } else {
+        await ctx.reply(message, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard,
+        });
+      }
+    } catch (error: any) {
+      logger.error('[Telegram] Error in handleRounds:', error);
+      await ctx.reply('Failed to fetch round history. Please try again.');
+    }
+  }
+
+  /**
    * Handle /settings command - view settings
    */
   private async handleSettings(ctx: BotContext, edit: boolean = false) {
@@ -1952,51 +2026,6 @@ Auto-claim features are coming soon for multi-user support.`;
     } catch (error) {
       logger.error('[Telegram] Error in handleRound:', error);
       await ctx.reply('Failed to fetch round info. Please try again.');
-    }
-  }
-
-  /**
-   * Handle /rounds command - recent rounds view
-   */
-  private async handleRounds(ctx: BotContext, edit: boolean = false) {
-    const telegramId = ctx.from!.id.toString();
-
-    if (!(await this.isUserRegistered(telegramId))) {
-      await ctx.reply('Please use /start to connect your wallet first.');
-      return;
-    }
-
-    try {
-      await updateLastActive(telegramId);
-
-      const rounds = await getUserRecentRounds(telegramId, 10);
-      const stats = await getUserRoundStats(telegramId);
-
-      let message = formatRecentRoundsDisplay(rounds);
-      message += '\n\n' + formatRoundStatsDisplay(stats);
-
-      const keyboard = {
-        inline_keyboard: [
-          [{ text: '🔄 Refresh', callback_data: 'rounds' }],
-          [{ text: '🎯 Current Round', callback_data: 'round' }],
-          [{ text: '🏠 Main Menu', callback_data: 'start' }],
-        ],
-      };
-
-      if (edit && ctx.callbackQuery && ctx.callbackQuery.message) {
-        await ctx.editMessageText(message, {
-          parse_mode: 'Markdown',
-          reply_markup: keyboard,
-        });
-      } else {
-        await ctx.reply(message, {
-          parse_mode: 'Markdown',
-          reply_markup: keyboard,
-        });
-      }
-    } catch (error) {
-      logger.error('[Telegram] Error in handleRounds:', error);
-      await ctx.reply('Failed to fetch rounds. Please try again.');
     }
   }
 

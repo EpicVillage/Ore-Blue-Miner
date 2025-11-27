@@ -325,14 +325,16 @@ export async function deployUserSol(
       telegramId,
     });
 
-    // Record user round participation
-    const { recordUserRound } = await import('./userRounds');
+    // Record user round participation with deployed squares
+    const { recordUserRound, getUserDeployedSquares } = await import('./userRounds');
+    const deployedSquares = await getUserDeployedSquares(telegramId);
     await recordUserRound(
       telegramId,
       roundId,
       motherloadOrb,
       amount,
-      25 // assuming 25 squares
+      deployedSquares.length,
+      deployedSquares
     );
 
     logger.info(`[User Deploy] Successfully deployed ${amount.toFixed(4)} SOL to round ${roundId} | ${signature}`);

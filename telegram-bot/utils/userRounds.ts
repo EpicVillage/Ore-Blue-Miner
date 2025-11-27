@@ -20,6 +20,9 @@ export async function initializeUserRoundsTable(): Promise<void> {
       motherlode REAL DEFAULT 0,
       deployed_sol REAL DEFAULT 0,
       squares_deployed INTEGER DEFAULT 0,
+      deployed_squares TEXT DEFAULT '[]',
+      winning_square INTEGER DEFAULT -1,
+      hit INTEGER DEFAULT 0,
       won INTEGER DEFAULT 0,
       rewards_claimed REAL DEFAULT 0,
       orb_rewards REAL DEFAULT 0,
@@ -32,7 +35,30 @@ export async function initializeUserRoundsTable(): Promise<void> {
   await runQuery(`CREATE INDEX IF NOT EXISTS idx_user_rounds_telegram_id ON user_rounds(telegram_id)`);
   await runQuery(`CREATE INDEX IF NOT EXISTS idx_user_rounds_round_id ON user_rounds(round_id)`);
 
+  // Migration: Add new columns to existing tables
+  const migrations = [
+    `ALTER TABLE user_rounds ADD COLUMN deployed_squares TEXT DEFAULT '[]'`,
+    `ALTER TABLE user_rounds ADD COLUMN winning_square INTEGER DEFAULT -1`,
+    `ALTER TABLE user_rounds ADD COLUMN hit INTEGER DEFAULT 0`,
+  ];
+
+  for (const sql of migrations) {
+    try {
+      await runQuery(sql);
+    } catch (error: any) {
+      // Ignore duplicate column errors
+      if (!error.message?.includes('duplicate column')) {
+        throw error;
+      }
+    }
+  }
+
   logger.info('[Telegram DB] User rounds table initialized');
+}
+
+export interface DeployedSquare {
+  square: number;
+  amount: number; // SOL amount
 }
 
 export interface UserRound {
@@ -43,6 +69,9 @@ export interface UserRound {
   motherlode: number;
   deployed_sol: number;
   squares_deployed: number;
+  deployed_squares: DeployedSquare[];
+  winning_square: number;
+  hit: boolean;
   won: boolean;
   rewards_claimed: number;
   orb_rewards: number;
@@ -57,20 +86,78 @@ export async function recordUserRound(
   roundId: number,
   motherlode: number,
   deployedSol: number,
-  squaresDeployed: number
+  squaresDeployed: number,
+  deployedSquares: DeployedSquare[] = []
 ): Promise<void> {
+  const deployedSquaresJson = JSON.stringify(deployedSquares);
+
   await runQuery(`
     INSERT INTO user_rounds (
-      telegram_id, round_id, timestamp, motherlode, deployed_sol, squares_deployed
+      telegram_id, round_id, timestamp, motherlode, deployed_sol, squares_deployed, deployed_squares
     )
-    VALUES (?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(telegram_id, round_id) DO UPDATE SET
       motherlode = excluded.motherlode,
-      deployed_sol = excluded.deployed_sol,
-      squares_deployed = excluded.squares_deployed
-  `, [telegramId, roundId, Date.now(), motherlode, deployedSol, squaresDeployed]);
+      deployed_sol = user_rounds.deployed_sol + excluded.deployed_sol,
+      squares_deployed = excluded.squares_deployed,
+      deployed_squares = excluded.deployed_squares
+  `, [telegramId, roundId, Date.now(), motherlode, deployedSol, squaresDeployed, deployedSquaresJson]);
 
-  logger.debug(`[User Rounds] Recorded round ${roundId} for ${telegramId}: ${deployedSol} SOL deployed`);
+  logger.debug(`[User Rounds] Recorded round ${roundId} for ${telegramId}: ${deployedSol} SOL deployed to ${squaresDeployed} squares`);
+}
+
+/**
+ * Update round result with winning square and hit status
+ */
+export async function updateRoundResult(
+  telegramId: string,
+  roundId: number,
+  winningSquare: number
+): Promise<void> {
+  // First get the deployed squares for this user's round
+  const userRound = await getUserRound(telegramId, roundId);
+  if (!userRound) {
+    logger.debug(`[User Rounds] No round record found for ${telegramId} round ${roundId}`);
+    return;
+  }
+
+  // Check if user hit the winning square
+  const hit = userRound.deployed_squares.some(ds => ds.square === winningSquare);
+
+  await runQuery(`
+    UPDATE user_rounds
+    SET winning_square = ?, hit = ?
+    WHERE telegram_id = ? AND round_id = ?
+  `, [winningSquare, hit ? 1 : 0, telegramId, roundId]);
+
+  logger.debug(`[User Rounds] Updated round ${roundId} for ${telegramId}: winning=${winningSquare}, hit=${hit}`);
+}
+
+/**
+ * Update all pending rounds with winning square (batch update after round ends)
+ */
+export async function updateAllRoundsResult(
+  roundId: number,
+  winningSquare: number
+): Promise<void> {
+  // Get all user rounds for this round that don't have winning_square set
+  const pendingRounds = await allQuery<any>(`
+    SELECT telegram_id, deployed_squares FROM user_rounds
+    WHERE round_id = ? AND winning_square = -1
+  `, [roundId]);
+
+  for (const row of pendingRounds) {
+    const deployedSquares: DeployedSquare[] = JSON.parse(row.deployed_squares || '[]');
+    const hit = deployedSquares.some(ds => ds.square === winningSquare);
+
+    await runQuery(`
+      UPDATE user_rounds
+      SET winning_square = ?, hit = ?
+      WHERE telegram_id = ? AND round_id = ?
+    `, [winningSquare, hit ? 1 : 0, row.telegram_id, roundId]);
+  }
+
+  logger.info(`[User Rounds] Updated ${pendingRounds.length} user rounds for round ${roundId} with winning square ${winningSquare}`);
 }
 
 /**
@@ -178,6 +265,13 @@ export async function getUserRound(
  * Convert database row to UserRound object
  */
 function convertRoundFromDb(row: any): UserRound {
+  let deployedSquares: DeployedSquare[] = [];
+  try {
+    deployedSquares = JSON.parse(row.deployed_squares || '[]');
+  } catch {
+    deployedSquares = [];
+  }
+
   return {
     id: row.id,
     telegram_id: row.telegram_id,
@@ -186,6 +280,9 @@ function convertRoundFromDb(row: any): UserRound {
     motherlode: row.motherlode,
     deployed_sol: row.deployed_sol,
     squares_deployed: row.squares_deployed,
+    deployed_squares: deployedSquares,
+    winning_square: row.winning_square ?? -1,
+    hit: row.hit === 1,
     won: row.won === 1,
     rewards_claimed: row.rewards_claimed,
     orb_rewards: row.orb_rewards,
@@ -198,31 +295,47 @@ function convertRoundFromDb(row: any): UserRound {
  */
 export function formatRecentRoundsDisplay(rounds: UserRound[]): string {
   if (rounds.length === 0) {
-    return `
-📜 *Recent Rounds*
-
-No rounds participated yet.
-`.trim();
+    return `📜 *Recent Rounds*\n\nNo rounds participated yet.`;
   }
 
   const roundsList = rounds.map((round, index) => {
-    const winStatus = round.won ? '✅ Won' : round.rewards_claimed > 0 ? '💰 Partial' : '❌ Lost';
+    // Determine status emoji and text
+    let statusEmoji = '⏳';
+    let statusText = 'Pending';
+
+    if (round.winning_square >= 0) {
+      if (round.hit) {
+        statusEmoji = '✅';
+        statusText = 'HIT';
+      } else {
+        statusEmoji = '❌';
+        statusText = 'MISSED';
+      }
+    }
+
+    // Format deployed squares
+    let squaresInfo = '';
+    if (round.deployed_squares.length > 0) {
+      const squareNums = round.deployed_squares.map(ds => ds.square + 1).join(', ');
+      squaresInfo = `Sq: ${squareNums}`;
+    }
+
+    // Winning square info
+    let winningInfo = '';
+    if (round.winning_square >= 0) {
+      winningInfo = ` → Won: ${round.winning_square + 1}`;
+    }
+
+    // Rewards if any
     const rewards = round.rewards_claimed > 0 || round.orb_rewards > 0
-      ? `\n  Rewards: ${formatSOL(round.rewards_claimed)} + ${formatORB(round.orb_rewards)}`
+      ? `\n   💰 +${formatSOL(round.rewards_claimed)} +${formatORB(round.orb_rewards)}`
       : '';
 
-    return `
-${index + 1}. *Round #${round.round_id}* ${winStatus}
-  Motherlode: ${formatORB(round.motherlode)}
-  Deployed: ${formatSOL(round.deployed_sol)} (${round.squares_deployed} squares)
-  Time: ${formatTimestamp(round.timestamp)}${rewards}`;
-  }).join('\n');
+    return `${statusEmoji} *#${round.round_id}* ${statusText}
+   ${formatSOL(round.deployed_sol)} deployed${squaresInfo ? ` (${squaresInfo})` : ''}${winningInfo}${rewards}`;
+  }).join('\n\n');
 
-  return `
-📜 *Recent Rounds*
-
-${roundsList}
-`.trim();
+  return `📜 *Recent Rounds*\n\n${roundsList}`;
 }
 
 /**
@@ -255,6 +368,67 @@ export function formatRoundStatsDisplay(stats: {
 • Avg Deployment: ${formatSOL(stats.avgDeployment)}
 • Avg Motherlode: ${formatORB(stats.avgMotherlode)}
 `.trim();
+}
+
+/**
+ * Calculate winning square from round's slotHash
+ * The winning square is determined by the first byte of the sample mod 25
+ */
+export function calculateWinningSquare(slotHash: Buffer): number {
+  if (!slotHash || slotHash.length < 1) {
+    return -1;
+  }
+  return slotHash[0] % 25;
+}
+
+/**
+ * Get user's deployed squares from Miner account on-chain
+ */
+export async function getUserDeployedSquares(telegramId: string): Promise<DeployedSquare[]> {
+  try {
+    const { getUserWallet } = await import('./userWallet');
+    const { fetchMiner } = await import('../../src/utils/accounts');
+
+    const wallet = await getUserWallet(telegramId);
+    if (!wallet) {
+      return [];
+    }
+
+    const miner = await fetchMiner(wallet.publicKey);
+    if (!miner) {
+      return [];
+    }
+
+    // Convert deployed array to DeployedSquare objects
+    const deployedSquares: DeployedSquare[] = [];
+    for (let i = 0; i < 25; i++) {
+      const amount = Number(miner.deployed[i]) / 1e9; // Convert lamports to SOL
+      if (amount > 0) {
+        deployedSquares.push({ square: i, amount });
+      }
+    }
+
+    return deployedSquares;
+  } catch (error) {
+    logger.error('[User Rounds] Failed to get deployed squares:', error);
+    return [];
+  }
+}
+
+/**
+ * Get winning square for a specific round from on-chain data
+ */
+export async function getRoundWinningSquare(roundId: number): Promise<number> {
+  try {
+    const { fetchRound } = await import('../../src/utils/accounts');
+    const BN = (await import('bn.js')).default;
+
+    const round = await fetchRound(new BN(roundId));
+    return calculateWinningSquare(round.slotHash);
+  } catch (error) {
+    logger.error(`[User Rounds] Failed to get winning square for round ${roundId}:`, error);
+    return -1;
+  }
 }
 
 /**
