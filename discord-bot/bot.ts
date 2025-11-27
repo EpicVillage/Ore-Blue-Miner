@@ -1421,7 +1421,7 @@ class OrbMiningDiscordBot {
                 .setStyle(ButtonStyle.Secondary),
               new ButtonBuilder()
                 .setCustomId('s2_custom:auto_claim_thresholds')
-                .setLabel('Claim Thresholds')
+                .setLabel('Auto Claim')
                 .setStyle(ButtonStyle.Secondary),
             ),
           ];
@@ -1741,58 +1741,70 @@ class OrbMiningDiscordBot {
     interaction: ButtonInteraction | StringSelectMenuInteraction,
     setting: string
   ) {
-    const modal = new ModalBuilder()
-      .setCustomId(`s2_custom_modal:${setting}`)
-      .setTitle('Custom Value');
-
+    let title: string;
     let label: string;
     let placeholder: string;
 
     switch (setting) {
       case 'swap_threshold':
+        title = 'Set Swap Threshold';
         label = 'Swap Threshold (ORB)';
         placeholder = '100';
         break;
       case 'stake_threshold':
+        title = 'Set Stake Threshold';
         label = 'Stake Threshold (ORB)';
         placeholder = '50';
         break;
       case 'orb_transfer_threshold':
+        title = 'Set Transfer Threshold';
         label = 'Transfer Threshold (ORB)';
         placeholder = '100';
         break;
       case 'motherload_threshold':
+        title = 'Set Motherload Threshold';
         label = 'Motherload Threshold (ORB)';
         placeholder = '100';
         break;
       case 'automation_budget_percent':
+        title = 'Set Budget Allocation';
         label = 'Budget Allocation (%)';
         placeholder = '90';
         break;
       case 'min_orb_price':
+        title = 'Set Minimum ORB Price';
         label = 'Minimum ORB Price ($)';
         placeholder = '30';
         break;
       case 'min_orb_to_keep':
+        title = 'Set Minimum ORB to Keep';
         label = 'Minimum ORB to Keep';
         placeholder = '0';
         break;
       case 'sol_per_block':
+        title = 'Set SOL per Block';
         label = 'SOL per Block';
         placeholder = '0.001';
         break;
       case 'num_blocks':
+        title = 'Set Number of Blocks';
         label = 'Number of Blocks';
         placeholder = '10';
         break;
       case 'auto_claim_thresholds':
+        title = 'Set Auto-Claim Thresholds';
         label = 'SOL Threshold, ORB Threshold (comma sep)';
         placeholder = '0.1, 1.0';
         break;
       default:
+        title = 'Set Value';
         label = 'Value';
         placeholder = '0';
     }
+
+    const modal = new ModalBuilder()
+      .setCustomId(`s2_custom_modal:${setting}`)
+      .setTitle(title);
 
     const valueInput = new TextInputBuilder()
       .setCustomId('value')
