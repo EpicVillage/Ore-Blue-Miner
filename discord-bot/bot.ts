@@ -125,13 +125,10 @@ const commands = [
       sub.setName('view').setDescription('View your current settings')
     )
     .addSubcommand(sub =>
-      sub.setName('mining').setDescription('Configure mining settings')
+      sub.setName('mining').setDescription('Configure mining & claim settings')
     )
     .addSubcommand(sub =>
-      sub.setName('automation').setDescription('Configure automation settings')
-    )
-    .addSubcommand(sub =>
-      sub.setName('swap').setDescription('Configure swap settings')
+      sub.setName('automation').setDescription('Configure swap, stake & transfer settings')
     ),
 
   new SlashCommandBuilder()
@@ -249,7 +246,6 @@ class OrbMiningDiscordBot {
       case 'automation_stop': await this.handleAutomationStopButton(interaction); break;
       case 'settings_mining': await this.showMiningSettingsModal(interaction); break;
       case 'settings_automation': await this.showAutomationSettingsModal(interaction); break;
-      case 'settings_swap': await this.showSwapSettingsModal(interaction); break;
       default:
         await interaction.reply({ content: 'Unknown action', ephemeral: true });
     }
@@ -262,7 +258,6 @@ class OrbMiningDiscordBot {
       case 'import_wallet_modal': await this.handleImportWalletSubmit(interaction); break;
       case 'mining_settings_modal': await this.handleMiningSettingsSubmit(interaction); break;
       case 'automation_settings_modal': await this.handleAutomationSettingsSubmit(interaction); break;
-      case 'swap_settings_modal': await this.handleSwapSettingsSubmit(interaction); break;
       default:
         await interaction.reply({ content: 'Unknown modal', ephemeral: true });
     }
@@ -888,27 +883,21 @@ class OrbMiningDiscordBot {
           .setTitle('Your Settings')
           .addFields(
             {
-              name: 'Mining',
+              name: 'Mining & Claims',
               value:
-                `Motherload Threshold: \`${settings.motherload_threshold} ORB\`\n` +
-                `SOL per Block: \`${settings.sol_per_block} SOL\`\n` +
-                `Blocks per Round: \`${settings.num_blocks}\``,
-              inline: true,
-            },
-            {
-              name: 'Automation',
-              value:
+                `Motherload: \`${settings.motherload_threshold} ORB\`\n` +
+                `SOL/Block: \`${settings.sol_per_block}\` | Blocks: \`${settings.num_blocks}\`\n` +
                 `Budget: \`${settings.automation_budget_percent}%\`\n` +
-                `Auto-Claim SOL: \`${settings.auto_claim_sol_threshold} SOL\`\n` +
-                `Auto-Claim ORB: \`${settings.auto_claim_orb_threshold} ORB\``,
+                `Claim SOL: \`${settings.auto_claim_sol_threshold}\` | ORB: \`${settings.auto_claim_orb_threshold}\``,
               inline: true,
             },
             {
-              name: 'Swap',
+              name: 'Swap, Stake & Transfer',
               value:
-                `Auto-Swap: \`${settings.auto_swap_enabled ? 'ON' : 'OFF'}\`\n` +
-                `Threshold: \`${settings.swap_threshold} ORB\`\n` +
-                `Slippage: \`${settings.slippage_bps / 100}%\``,
+                `Auto-Swap: \`${settings.auto_swap_enabled ? 'ON' : 'OFF'}\` @ \`${settings.swap_threshold} ORB\`\n` +
+                `Slippage: \`${settings.slippage_bps / 100}%\`\n` +
+                `Auto-Stake: \`${settings.auto_stake_enabled ? 'ON' : 'OFF'}\` @ \`${settings.stake_threshold} ORB\`\n` +
+                `Auto-Transfer: \`${settings.auto_transfer_enabled ? 'ON' : 'OFF'}\``,
               inline: true,
             },
           );
@@ -916,15 +905,11 @@ class OrbMiningDiscordBot {
         const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
           new ButtonBuilder()
             .setCustomId('settings_mining')
-            .setLabel('Mining')
+            .setLabel('Mining & Claims')
             .setStyle(ButtonStyle.Secondary),
           new ButtonBuilder()
             .setCustomId('settings_automation')
-            .setLabel('Automation')
-            .setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder()
-            .setCustomId('settings_swap')
-            .setLabel('Swap')
+            .setLabel('Swap & Stake')
             .setStyle(ButtonStyle.Secondary),
         );
 
@@ -936,8 +921,6 @@ class OrbMiningDiscordBot {
       await this.showMiningSettingsModal(interaction as any);
     } else if (subcommand === 'automation') {
       await this.showAutomationSettingsModal(interaction as any);
-    } else if (subcommand === 'swap') {
-      await this.showSwapSettingsModal(interaction as any);
     }
   }
 
@@ -947,7 +930,7 @@ class OrbMiningDiscordBot {
 
     const modal = new ModalBuilder()
       .setCustomId('mining_settings_modal')
-      .setTitle('Mining Settings');
+      .setTitle('Mining & Claim Settings');
 
     const motherloadInput = new TextInputBuilder()
       .setCustomId('motherload_threshold')
@@ -956,61 +939,17 @@ class OrbMiningDiscordBot {
       .setValue(String(settings.motherload_threshold))
       .setRequired(true);
 
-    const solPerBlockInput = new TextInputBuilder()
-      .setCustomId('sol_per_block')
-      .setLabel('SOL per Block')
+    const miningInput = new TextInputBuilder()
+      .setCustomId('mining_config')
+      .setLabel('SOL per Block, Number of Blocks (comma sep)')
       .setStyle(TextInputStyle.Short)
-      .setValue(String(settings.sol_per_block))
+      .setValue(`${settings.sol_per_block}, ${settings.num_blocks}`)
+      .setPlaceholder('0.001, 10')
       .setRequired(true);
-
-    const numBlocksInput = new TextInputBuilder()
-      .setCustomId('num_blocks')
-      .setLabel('Number of Blocks per Round')
-      .setStyle(TextInputStyle.Short)
-      .setValue(String(settings.num_blocks))
-      .setRequired(true);
-
-    modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(motherloadInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(solPerBlockInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(numBlocksInput),
-    );
-
-    await interaction.showModal(modal);
-  }
-
-  private async handleMiningSettingsSubmit(interaction: ModalSubmitInteraction) {
-    await interaction.deferReply({ ephemeral: true });
-    const discordId = interaction.user.id;
-
-    try {
-      const motherload = parseFloat(interaction.fields.getTextInputValue('motherload_threshold'));
-      const solPerBlock = parseFloat(interaction.fields.getTextInputValue('sol_per_block'));
-      const numBlocks = parseInt(interaction.fields.getTextInputValue('num_blocks'));
-
-      await updateUserSetting(PLATFORM, discordId, 'motherload_threshold', motherload);
-      await updateUserSetting(PLATFORM, discordId, 'sol_per_block', solPerBlock);
-      await updateUserSetting(PLATFORM, discordId, 'num_blocks', numBlocks);
-
-      await interaction.editReply({
-        embeds: [formatSuccessEmbed('Settings Updated', 'Mining settings have been saved.')],
-      });
-    } catch (error) {
-      await interaction.editReply({ embeds: [formatErrorEmbed('Error', 'Failed to save settings.')] });
-    }
-  }
-
-  private async showAutomationSettingsModal(interaction: ButtonInteraction | ChatInputCommandInteraction) {
-    const discordId = interaction.user.id;
-    const settings = await getUserSettings(PLATFORM, discordId);
-
-    const modal = new ModalBuilder()
-      .setCustomId('automation_settings_modal')
-      .setTitle('Automation Settings');
 
     const budgetInput = new TextInputBuilder()
       .setCustomId('automation_budget_percent')
-      .setLabel('Budget Percentage (%)')
+      .setLabel('Automation Budget (%)')
       .setStyle(TextInputStyle.Short)
       .setValue(String(settings.automation_budget_percent))
       .setRequired(true);
@@ -1030,9 +969,101 @@ class OrbMiningDiscordBot {
       .setRequired(true);
 
     modal.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(motherloadInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(miningInput),
       new ActionRowBuilder<TextInputBuilder>().addComponents(budgetInput),
       new ActionRowBuilder<TextInputBuilder>().addComponents(autoClaimSolInput),
       new ActionRowBuilder<TextInputBuilder>().addComponents(autoClaimOrbInput),
+    );
+
+    await interaction.showModal(modal);
+  }
+
+  private async handleMiningSettingsSubmit(interaction: ModalSubmitInteraction) {
+    await interaction.deferReply({ ephemeral: true });
+    const discordId = interaction.user.id;
+
+    try {
+      const motherload = parseFloat(interaction.fields.getTextInputValue('motherload_threshold'));
+      const miningConfig = interaction.fields.getTextInputValue('mining_config').split(',').map(s => s.trim());
+      const solPerBlock = parseFloat(miningConfig[0] || '0.001');
+      const numBlocks = parseInt(miningConfig[1] || '10');
+      const budget = parseFloat(interaction.fields.getTextInputValue('automation_budget_percent'));
+      const autoClaimSol = parseFloat(interaction.fields.getTextInputValue('auto_claim_sol_threshold'));
+      const autoClaimOrb = parseFloat(interaction.fields.getTextInputValue('auto_claim_orb_threshold'));
+
+      await updateUserSetting(PLATFORM, discordId, 'motherload_threshold', motherload);
+      await updateUserSetting(PLATFORM, discordId, 'sol_per_block', solPerBlock);
+      await updateUserSetting(PLATFORM, discordId, 'num_blocks', numBlocks);
+      await updateUserSetting(PLATFORM, discordId, 'automation_budget_percent', budget);
+      await updateUserSetting(PLATFORM, discordId, 'auto_claim_sol_threshold', autoClaimSol);
+      await updateUserSetting(PLATFORM, discordId, 'auto_claim_orb_threshold', autoClaimOrb);
+
+      await interaction.editReply({
+        embeds: [formatSuccessEmbed('Settings Updated',
+          `Motherload: ${motherload} ORB\n` +
+          `Mining: ${solPerBlock} SOL x ${numBlocks} blocks\n` +
+          `Budget: ${budget}%\n` +
+          `Auto-Claim: ${autoClaimSol} SOL, ${autoClaimOrb} ORB`
+        )],
+      });
+    } catch (error) {
+      await interaction.editReply({ embeds: [formatErrorEmbed('Error', 'Failed to save settings.')] });
+    }
+  }
+
+  private async showAutomationSettingsModal(interaction: ButtonInteraction | ChatInputCommandInteraction) {
+    const discordId = interaction.user.id;
+    const settings = await getUserSettings(PLATFORM, discordId);
+
+    const modal = new ModalBuilder()
+      .setCustomId('automation_settings_modal')
+      .setTitle('Swap, Stake & Transfer Settings');
+
+    const swapInput = new TextInputBuilder()
+      .setCustomId('swap_config')
+      .setLabel('Auto-Swap: enabled (1/0), threshold, slippage bps')
+      .setStyle(TextInputStyle.Short)
+      .setValue(`${settings.auto_swap_enabled ? '1' : '0'}, ${settings.swap_threshold}, ${settings.slippage_bps}`)
+      .setPlaceholder('1, 100, 300')
+      .setRequired(true);
+
+    const stakeInput = new TextInputBuilder()
+      .setCustomId('stake_config')
+      .setLabel('Auto-Stake: enabled (1/0), threshold ORB')
+      .setStyle(TextInputStyle.Short)
+      .setValue(`${settings.auto_stake_enabled ? '1' : '0'}, ${settings.stake_threshold}`)
+      .setPlaceholder('0, 50')
+      .setRequired(true);
+
+    const transferInput = new TextInputBuilder()
+      .setCustomId('transfer_config')
+      .setLabel('Auto-Transfer: enabled (1/0), threshold ORB')
+      .setStyle(TextInputStyle.Short)
+      .setValue(`${settings.auto_transfer_enabled ? '1' : '0'}, ${settings.orb_transfer_threshold}`)
+      .setPlaceholder('0, 100')
+      .setRequired(true);
+
+    const minOrbInput = new TextInputBuilder()
+      .setCustomId('min_orb_to_keep')
+      .setLabel('Minimum ORB to Keep (for swaps)')
+      .setStyle(TextInputStyle.Short)
+      .setValue(String(settings.min_orb_to_keep))
+      .setRequired(true);
+
+    const minPriceInput = new TextInputBuilder()
+      .setCustomId('min_orb_price')
+      .setLabel('Minimum ORB Price for Swap ($)')
+      .setStyle(TextInputStyle.Short)
+      .setValue(String(settings.min_orb_price))
+      .setRequired(true);
+
+    modal.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(swapInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(stakeInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(transferInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(minOrbInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(minPriceInput),
     );
 
     await interaction.showModal(modal);
@@ -1043,75 +1074,42 @@ class OrbMiningDiscordBot {
     const discordId = interaction.user.id;
 
     try {
-      const budget = parseFloat(interaction.fields.getTextInputValue('automation_budget_percent'));
-      const autoClaimSol = parseFloat(interaction.fields.getTextInputValue('auto_claim_sol_threshold'));
-      const autoClaimOrb = parseFloat(interaction.fields.getTextInputValue('auto_claim_orb_threshold'));
+      // Parse swap config
+      const swapConfig = interaction.fields.getTextInputValue('swap_config').split(',').map(s => s.trim());
+      const autoSwap = swapConfig[0] === '1' ? 1 : 0;
+      const swapThreshold = parseFloat(swapConfig[1] || '100');
+      const slippage = parseInt(swapConfig[2] || '300');
 
-      await updateUserSetting(PLATFORM, discordId, 'automation_budget_percent', budget);
-      await updateUserSetting(PLATFORM, discordId, 'auto_claim_sol_threshold', autoClaimSol);
-      await updateUserSetting(PLATFORM, discordId, 'auto_claim_orb_threshold', autoClaimOrb);
+      // Parse stake config
+      const stakeConfig = interaction.fields.getTextInputValue('stake_config').split(',').map(s => s.trim());
+      const autoStake = stakeConfig[0] === '1' ? 1 : 0;
+      const stakeThreshold = parseFloat(stakeConfig[1] || '50');
 
-      await interaction.editReply({
-        embeds: [formatSuccessEmbed('Settings Updated', 'Automation settings have been saved.')],
-      });
-    } catch (error) {
-      await interaction.editReply({ embeds: [formatErrorEmbed('Error', 'Failed to save settings.')] });
-    }
-  }
+      // Parse transfer config
+      const transferConfig = interaction.fields.getTextInputValue('transfer_config').split(',').map(s => s.trim());
+      const autoTransfer = transferConfig[0] === '1' ? 1 : 0;
+      const transferThreshold = parseFloat(transferConfig[1] || '100');
 
-  private async showSwapSettingsModal(interaction: ButtonInteraction | ChatInputCommandInteraction) {
-    const discordId = interaction.user.id;
-    const settings = await getUserSettings(PLATFORM, discordId);
-
-    const modal = new ModalBuilder()
-      .setCustomId('swap_settings_modal')
-      .setTitle('Swap Settings');
-
-    const autoSwapInput = new TextInputBuilder()
-      .setCustomId('auto_swap_enabled')
-      .setLabel('Auto-Swap Enabled (1 = yes, 0 = no)')
-      .setStyle(TextInputStyle.Short)
-      .setValue(settings.auto_swap_enabled ? '1' : '0')
-      .setRequired(true);
-
-    const thresholdInput = new TextInputBuilder()
-      .setCustomId('swap_threshold')
-      .setLabel('Swap Threshold (ORB)')
-      .setStyle(TextInputStyle.Short)
-      .setValue(String(settings.swap_threshold))
-      .setRequired(true);
-
-    const slippageInput = new TextInputBuilder()
-      .setCustomId('slippage_bps')
-      .setLabel('Slippage (bps, e.g. 300 = 3%)')
-      .setStyle(TextInputStyle.Short)
-      .setValue(String(settings.slippage_bps))
-      .setRequired(true);
-
-    modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(autoSwapInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(thresholdInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(slippageInput),
-    );
-
-    await interaction.showModal(modal);
-  }
-
-  private async handleSwapSettingsSubmit(interaction: ModalSubmitInteraction) {
-    await interaction.deferReply({ ephemeral: true });
-    const discordId = interaction.user.id;
-
-    try {
-      const autoSwap = interaction.fields.getTextInputValue('auto_swap_enabled') === '1' ? 1 : 0;
-      const threshold = parseFloat(interaction.fields.getTextInputValue('swap_threshold'));
-      const slippage = parseInt(interaction.fields.getTextInputValue('slippage_bps'));
+      const minOrbToKeep = parseFloat(interaction.fields.getTextInputValue('min_orb_to_keep'));
+      const minOrbPrice = parseFloat(interaction.fields.getTextInputValue('min_orb_price'));
 
       await updateUserSetting(PLATFORM, discordId, 'auto_swap_enabled', autoSwap);
-      await updateUserSetting(PLATFORM, discordId, 'swap_threshold', threshold);
+      await updateUserSetting(PLATFORM, discordId, 'swap_threshold', swapThreshold);
       await updateUserSetting(PLATFORM, discordId, 'slippage_bps', slippage);
+      await updateUserSetting(PLATFORM, discordId, 'auto_stake_enabled', autoStake);
+      await updateUserSetting(PLATFORM, discordId, 'stake_threshold', stakeThreshold);
+      await updateUserSetting(PLATFORM, discordId, 'auto_transfer_enabled', autoTransfer);
+      await updateUserSetting(PLATFORM, discordId, 'orb_transfer_threshold', transferThreshold);
+      await updateUserSetting(PLATFORM, discordId, 'min_orb_to_keep', minOrbToKeep);
+      await updateUserSetting(PLATFORM, discordId, 'min_orb_price', minOrbPrice);
 
       await interaction.editReply({
-        embeds: [formatSuccessEmbed('Settings Updated', 'Swap settings have been saved.')],
+        embeds: [formatSuccessEmbed('Settings Updated',
+          `Auto-Swap: ${autoSwap ? 'ON' : 'OFF'} @ ${swapThreshold} ORB (${slippage/100}% slip)\n` +
+          `Auto-Stake: ${autoStake ? 'ON' : 'OFF'} @ ${stakeThreshold} ORB\n` +
+          `Auto-Transfer: ${autoTransfer ? 'ON' : 'OFF'} @ ${transferThreshold} ORB\n` +
+          `Min Keep: ${minOrbToKeep} ORB | Min Price: $${minOrbPrice}`
+        )],
       });
     } catch (error) {
       await interaction.editReply({ embeds: [formatErrorEmbed('Error', 'Failed to save settings.')] });
