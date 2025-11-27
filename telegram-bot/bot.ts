@@ -95,6 +95,14 @@ import {
   stopAutoSwap
 } from './utils/autoSwap';
 import {
+  initializeLinkedAccountsTable,
+  initializeDiscordUsersTable,
+  generateLinkCode,
+  linkAccounts,
+  getLinkedAccount,
+  unlinkAccounts
+} from '../shared/database';
+import {
   initializeAutoStake,
   stopAutoStake
 } from './utils/autoStake';
@@ -116,6 +124,7 @@ interface SessionData {
   awaitingSwapAmount?: boolean;
   awaitingDeployAmount?: boolean;
   awaitingTransferRecipient?: boolean;
+  awaitingLinkCode?: boolean;
   awaitingSettingInput?: {
     categoryKey: string;
     settingKey: string;
@@ -156,6 +165,7 @@ class OrbMiningBot {
     session.awaitingSwapAmount = false;
     session.awaitingDeployAmount = false;
     session.awaitingTransferRecipient = false;
+    session.awaitingLinkCode = false;
     session.awaitingSettingInput = undefined;
   }
 
@@ -364,6 +374,46 @@ class OrbMiningBot {
         return;
       }
 
+      // Check if we're waiting for a link code
+      if (session.awaitingLinkCode) {
+        try {
+          const linkCode = text.trim().toUpperCase();
+
+          // Validate format (8 hex characters)
+          if (!/^[A-F0-9]{8}$/.test(linkCode)) {
+            await ctx.reply('❌ Invalid link code format. Please enter an 8-character code (e.g., AB12CD34).\n\nUse /cancel to abort.');
+            return;
+          }
+
+          session.awaitingLinkCode = false;
+
+          // Attempt to link accounts
+          const result = await linkAccounts('telegram', telegramId, linkCode);
+
+          if (result.success) {
+            // Delete the user's message containing the code
+            try {
+              await ctx.deleteMessage();
+            } catch (error) {
+              // Ignore if we can't delete
+            }
+
+            await ctx.reply(
+              `✅ *Accounts Linked Successfully!*\n\nYour Telegram account is now linked to Discord ID: \`${result.linkedTo}\`\n\nBoth accounts now share the same wallet and data.`,
+              { parse_mode: 'Markdown' }
+            );
+
+            logger.info(`[Link] Linked telegram:${telegramId} to discord:${result.linkedTo}`);
+          } else {
+            await ctx.reply(`❌ Failed to link: ${result.error}\n\nUse /link to try again.`);
+          }
+        } catch (error) {
+          logger.error('[Telegram] Error processing link code:', error);
+          await ctx.reply('Failed to process link code. Please try again.');
+        }
+        return;
+      }
+
       // Check if we're waiting for a setting input
       if (session.awaitingSettingInput) {
         try {
@@ -526,7 +576,10 @@ class OrbMiningBot {
 /global - Platform-wide statistics
 
 <b>🏦 Staking:</b>
-/stake - View stake & rewards`,
+/stake - View stake & rewards
+
+<b>🔗 Cross-Platform:</b>
+/link - Link Discord account`,
           { parse_mode: 'HTML' }
         );
       } catch (error) {
@@ -621,6 +674,11 @@ class OrbMiningBot {
     // Transfer status command
     this.bot.command('transfer_status', async (ctx) => {
       await this.handleTransferStatus(ctx);
+    });
+
+    // Link command - link Discord account
+    this.bot.command('link', async (ctx) => {
+      await this.handleLink(ctx);
     });
   }
 
@@ -911,6 +969,27 @@ This action cannot be undone.`;
       this.lastRefreshTime.set(userId, now);
       await ctx.answerCbQuery('Refreshing...');
       await this.handleRounds(ctx, true);
+    });
+
+    // Account linking actions
+    this.bot.action('link_generate', async (ctx) => {
+      await ctx.answerCbQuery();
+      await this.handleLinkGenerate(ctx);
+    });
+
+    this.bot.action('link_use', async (ctx) => {
+      await ctx.answerCbQuery();
+      await this.handleLinkUseCode(ctx);
+    });
+
+    this.bot.action('link_unlink', async (ctx) => {
+      await ctx.answerCbQuery();
+      await this.handleUnlink(ctx);
+    });
+
+    this.bot.action('link_refresh', async (ctx) => {
+      await ctx.answerCbQuery();
+      await this.handleLink(ctx, true);
     });
 
     // Logs pagination handlers
@@ -2532,6 +2611,178 @@ Transfers happen automatically when your ORB balance reaches the threshold.
   }
 
   /**
+   * Handle /link command - manage account linking
+   */
+  private async handleLink(ctx: BotContext, edit: boolean = false) {
+    const telegramId = ctx.from!.id.toString();
+
+    if (!(await this.isUserRegistered(telegramId))) {
+      await ctx.reply('Please use /start to connect your wallet first.');
+      return;
+    }
+
+    try {
+      await updateLastActive(telegramId);
+
+      // Check if already linked
+      const linked = await getLinkedAccount('telegram', telegramId);
+      const isLinked = linked?.linked_at && linked?.discord_id;
+
+      let message: string;
+      let keyboard: any;
+
+      if (isLinked) {
+        message = `🔗 *Account Linking*
+
+✅ Your account is linked!
+
+*Linked Discord ID:* \`${linked!.discord_id}\`
+*Linked On:* ${new Date(linked!.linked_at!).toLocaleDateString()}
+
+Your Discord account shares the same wallet and data with this Telegram account.`;
+
+        keyboard = {
+          inline_keyboard: [
+            [{ text: '🔓 Unlink Accounts', callback_data: 'link_unlink' }],
+            [{ text: '🔄 Refresh', callback_data: 'link_refresh' }],
+            [{ text: '🏠 Main Menu', callback_data: 'start' }]
+          ],
+        };
+      } else {
+        message = `🔗 *Account Linking*
+
+Link your Telegram and Discord accounts to share the same wallet and settings across platforms.
+
+*How to link:*
+1️⃣ Generate a link code here
+2️⃣ Use the code on our Discord bot with \`/link <code>\`
+
+Or if you have a code from Discord:
+• Click "Use Link Code" and enter it`;
+
+        keyboard = {
+          inline_keyboard: [
+            [{ text: '🔑 Generate Link Code', callback_data: 'link_generate' }],
+            [{ text: '📥 Use Link Code', callback_data: 'link_use' }],
+            [{ text: '🔄 Refresh', callback_data: 'link_refresh' }],
+            [{ text: '🏠 Main Menu', callback_data: 'start' }]
+          ],
+        };
+      }
+
+      await this.safeEditOrReply(ctx, message, keyboard, edit);
+    } catch (error) {
+      logger.error('[Telegram] Error in handleLink:', error);
+      await ctx.reply('Failed to load linking status. Please try again.');
+    }
+  }
+
+  /**
+   * Handle generating a link code
+   */
+  private async handleLinkGenerate(ctx: BotContext) {
+    const telegramId = ctx.from!.id.toString();
+
+    try {
+      const linkCode = await generateLinkCode('telegram', telegramId);
+
+      const message = `🔑 *Link Code Generated*
+
+Your link code: \`${linkCode}\`
+
+⏱️ *Expires in 15 minutes*
+
+*To link your Discord account:*
+1. Go to our Discord bot
+2. Use the command \`/link ${linkCode}\`
+
+The code is case-insensitive.`;
+
+      const keyboard = {
+        inline_keyboard: [
+          [{ text: '🔄 Generate New Code', callback_data: 'link_generate' }],
+          [{ text: '◀️ Back', callback_data: 'link_refresh' }]
+        ],
+      };
+
+      if (ctx.callbackQuery && ctx.callbackQuery.message) {
+        await ctx.editMessageText(message, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard,
+        });
+      } else {
+        await ctx.reply(message, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard,
+        });
+      }
+    } catch (error) {
+      logger.error('[Telegram] Error generating link code:', error);
+      await ctx.reply('Failed to generate link code. Please try again.');
+    }
+  }
+
+  /**
+   * Handle prompting for a link code
+   */
+  private async handleLinkUseCode(ctx: BotContext) {
+    const userId = ctx.from!.id;
+    const session = this.getSession(userId);
+    session.awaitingLinkCode = true;
+
+    const message = `📥 *Enter Link Code*
+
+Please enter the 8-character link code you received from Discord:
+
+Example: \`AB12CD34\`
+
+Send /cancel to abort.`;
+
+    if (ctx.callbackQuery && ctx.callbackQuery.message) {
+      await ctx.editMessageText(message, { parse_mode: 'Markdown' });
+    } else {
+      await ctx.reply(message, { parse_mode: 'Markdown' });
+    }
+  }
+
+  /**
+   * Handle unlinking accounts
+   */
+  private async handleUnlink(ctx: BotContext) {
+    const telegramId = ctx.from!.id.toString();
+
+    try {
+      const success = await unlinkAccounts('telegram', telegramId);
+
+      if (success) {
+        const message = `🔓 *Accounts Unlinked*
+
+Your Telegram and Discord accounts are no longer linked.
+
+Each platform now has its own separate:
+• Wallet
+• Settings
+• Transaction history`;
+
+        await ctx.editMessageText(message, {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🔗 Link Again', callback_data: 'link_refresh' }],
+              [{ text: '🏠 Main Menu', callback_data: 'start' }]
+            ],
+          },
+        });
+      } else {
+        await ctx.answerCbQuery('Accounts are not linked', { show_alert: true });
+      }
+    } catch (error) {
+      logger.error('[Telegram] Error unlinking accounts:', error);
+      await ctx.reply('Failed to unlink accounts. Please try again.');
+    }
+  }
+
+  /**
    * Start the bot
    */
   async start() {
@@ -2541,6 +2792,8 @@ Transfers happen automatically when your ORB balance reaches the threshold.
       await initializeUserSettingsTable();
       await initializeUserRoundsTable();
       await initializeUserBalanceHistoryTable();
+      await initializeLinkedAccountsTable();
+      await initializeDiscordUsersTable();
       logger.info('[Telegram] User database tables initialized');
 
       // Initialize notifications system
