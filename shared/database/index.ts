@@ -51,3 +51,18 @@ export {
   getUsersWithSetting,
   getAllPlatformUsers,
 } from './settings';
+
+// Round tracking
+export {
+  DeployedSquare,
+  UserRound,
+  initializeUserRoundsTable,
+  recordUserRound,
+  updateRoundResult,
+  updateAllRoundsResult,
+  updateUserRoundRewards,
+  getUserRecentRounds,
+  getUserRoundStats,
+  getUserRound,
+  calculateWinningSquare,
+} from './rounds';

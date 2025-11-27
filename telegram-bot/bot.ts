@@ -17,7 +17,10 @@ import {
   deleteUser
 } from './utils/userDatabase';
 import { initializeUserSettingsTable } from './utils/userSettings';
-import { initializeUserRoundsTable } from './utils/userRounds';
+import { initializeUserRoundsTable as initializeTelegramUserRoundsTable } from './utils/userRounds';
+import { initializeUserRoundsTable, getUserRecentRounds, getUserRoundStats, Platform } from '../shared/database';
+
+const PLATFORM: Platform = 'telegram';
 import { initializeUserBalanceHistoryTable } from './utils/userPnL';
 import {
   getUserBalances,
@@ -61,8 +64,6 @@ import {
   formatStakingDisplay
 } from './utils/userStaking';
 import {
-  getUserRecentRounds,
-  getUserRoundStats,
   getCurrentRoundInfo,
   formatRecentRoundsDisplay,
   formatRoundStatsDisplay,
@@ -1949,8 +1950,8 @@ Auto-claim features are coming soon for multi-user support.`;
       await updateLastActive(telegramId);
 
       // Get recent rounds (last 10)
-      const rounds = await getUserRecentRounds(telegramId, 10);
-      const stats = await getUserRoundStats(telegramId);
+      const rounds = await getUserRecentRounds(PLATFORM, telegramId, 10);
+      const stats = await getUserRoundStats(PLATFORM, telegramId);
 
       let message = formatRecentRoundsDisplay(rounds);
 
@@ -2511,7 +2512,7 @@ Generated: ${new Date().toLocaleString()}
 
       const user = await getUser(telegramId);
       const stats = await getUserPerformanceStats(user?.public_key || '');
-      const rounds = await getUserRoundStats(telegramId);
+      const rounds = await getUserRoundStats(PLATFORM, telegramId);
       const balances = await getUserBalances(telegramId);
 
       const analyticsReport = `
@@ -2816,7 +2817,8 @@ Each platform now has its own separate:
       // Initialize telegram users tables
       await initializeTelegramUsersTable();
       await initializeUserSettingsTable();
-      await initializeUserRoundsTable();
+      await initializeTelegramUserRoundsTable(); // Legacy table for backwards compatibility
+      await initializeUserRoundsTable(); // Shared platform rounds table
       await initializeUserBalanceHistoryTable();
       await initializeLinkedAccountsTable();
       await initializeDiscordUsersTable();

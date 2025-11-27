@@ -1,6 +1,7 @@
 import { runQuery, getQuery, allQuery } from '../../src/utils/database';
 import logger from '../../src/utils/logger';
 import { formatORB, formatSOL, formatTimestamp } from './formatters';
+import { UserRound as SharedUserRound } from '../../shared/database/rounds';
 
 /**
  * User-specific rounds tracking for telegram bot users
@@ -292,8 +293,9 @@ function convertRoundFromDb(row: any): UserRound {
 
 /**
  * Format recent rounds for display
+ * Accepts both local UserRound and SharedUserRound types
  */
-export function formatRecentRoundsDisplay(rounds: UserRound[]): string {
+export function formatRecentRoundsDisplay(rounds: (UserRound | SharedUserRound)[]): string {
   if (rounds.length === 0) {
     return `📜 *Recent Rounds*\n\nNo rounds participated yet.`;
   }

@@ -14,7 +14,10 @@ import logger from '../../src/utils/logger';
 import { getOrbPrice } from '../../src/utils/jupiter';
 import { getUserSettings } from './userSettings';
 import { getUserWallet } from './userWallet';
-import { recordUserRound, getUserDeployedSquares, updateRoundResult, getRoundWinningSquare } from './userRounds';
+import { getUserDeployedSquares, getRoundWinningSquare } from './userRounds';
+import { recordUserRound, updateRoundResult, Platform } from '../../shared/database';
+
+const PLATFORM: Platform = 'telegram';
 
 /**
  * Automation Executor Service for Telegram Bot Users
@@ -292,7 +295,7 @@ async function executeUserAutomation(
           try {
             const winningSquare = await getRoundWinningSquare(roundId);
             if (winningSquare >= 0) {
-              await updateRoundResult(telegramId, roundId, winningSquare);
+              await updateRoundResult(PLATFORM, telegramId, roundId, winningSquare);
               logger.debug(`[Auto-Executor] User ${telegramId}: Updated round ${roundId} with winning square ${winningSquare}`);
             }
             // Small delay between RPC calls to avoid rate limiting
@@ -362,6 +365,7 @@ async function executeUserAutomation(
     try {
       const deployedSquares = await getUserDeployedSquares(telegramId);
       await recordUserRound(
+        PLATFORM,
         telegramId,
         board.roundId.toNumber(),
         currentMotherload,

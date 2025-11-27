@@ -27,6 +27,7 @@ import {
   initializeLinkedAccountsTable,
   initializeDiscordUsersTable,
   initializeDiscordSettingsTable,
+  initializeUserRoundsTable,
   getUser,
   generateLinkCode,
   linkAccounts,
@@ -47,6 +48,8 @@ import {
   getAutomationStatus,
   startAutomation,
   stopAutomation,
+  getUserRecentRounds,
+  getUserRoundStats,
 } from '../shared';
 import {
   formatWalletEmbed,
@@ -61,11 +64,6 @@ import {
 import { getOrbPrice } from '../src/utils/jupiter';
 import { fetchMiner, fetchStake, fetchBoard, fetchRound } from '../src/utils/accounts';
 import { loadAndCacheConfig } from '../src/utils/config';
-import {
-  getUserRecentRounds,
-  getUserRoundStats,
-  UserRound,
-} from '../telegram-bot/utils/userRounds';
 
 const PLATFORM: Platform = 'discord';
 
@@ -917,58 +915,48 @@ class OrbMiningDiscordBot {
           { name: 'Motherload', value: `\`${formatORB(motherlode)}\``, inline: true },
         );
 
-      // Check if user is linked to Telegram to show round history
-      const linked = await getLinkedAccount(PLATFORM, discordId);
-      if (linked?.linked_at && linked?.telegram_id) {
-        // User is linked - fetch their round history from Telegram data
-        try {
-          const rounds = await getUserRecentRounds(linked.telegram_id, 10);
-          const stats = await getUserRoundStats(linked.telegram_id);
+      // Fetch user's round history
+      try {
+        const rounds = await getUserRecentRounds(PLATFORM, discordId, 10);
+        const stats = await getUserRoundStats(PLATFORM, discordId);
 
-          if (rounds.length > 0) {
-            // Format recent rounds
-            const roundsList = rounds.slice(0, 5).map(r => {
-              let status = '⏳';
-              if (r.winning_square >= 0) {
-                status = r.hit ? '✅' : '❌';
-              }
-              const squares = r.deployed_squares.map(ds => ds.square + 1).join(', ');
-              return `${status} **#${r.round_id}** - ${formatSOL(r.deployed_sol)} ${squares ? `(Sq: ${squares})` : ''}`;
-            }).join('\n');
-
-            embed.addFields({
-              name: 'Recent Rounds',
-              value: roundsList || 'No rounds yet',
-              inline: false,
-            });
-
-            // Add stats
-            if (stats.totalRounds > 0) {
-              embed.addFields({
-                name: 'Statistics',
-                value: `Rounds: \`${stats.totalRounds}\` | Hits: \`${stats.totalWins}\` | Rate: \`${stats.winRate.toFixed(1)}%\``,
-                inline: false,
-              });
+        if (rounds.length > 0) {
+          // Format recent rounds
+          const roundsList = rounds.slice(0, 5).map(r => {
+            let status = '⏳';
+            if (r.winning_square >= 0) {
+              status = r.hit ? '✅' : '❌';
             }
-          } else {
+            const squares = r.deployed_squares.map(ds => ds.square + 1).join(', ');
+            return `${status} **#${r.round_id}** - ${formatSOL(r.deployed_sol)} ${squares ? `(Sq: ${squares})` : ''}`;
+          }).join('\n');
+
+          embed.addFields({
+            name: 'Recent Rounds',
+            value: roundsList || 'No rounds yet',
+            inline: false,
+          });
+
+          // Add stats
+          if (stats.totalRounds > 0) {
             embed.addFields({
-              name: 'Recent Rounds',
-              value: 'No rounds participated yet.',
+              name: 'Statistics',
+              value: `Rounds: \`${stats.totalRounds}\` | Hits: \`${stats.totalWins}\` | Rate: \`${stats.winRate.toFixed(1)}%\``,
               inline: false,
             });
           }
-        } catch (error) {
-          logger.error('[Discord] Error fetching round history:', error);
+        } else {
           embed.addFields({
-            name: 'Round History',
-            value: 'Unable to fetch round history.',
+            name: 'Recent Rounds',
+            value: 'No rounds participated yet. Start automation with `/automation start` to begin mining.',
             inline: false,
           });
         }
-      } else {
+      } catch (error) {
+        logger.error('[Discord] Error fetching round history:', error);
         embed.addFields({
           name: 'Round History',
-          value: 'Link your Telegram account with `/link` to see your round history.',
+          value: 'Unable to fetch round history.',
           inline: false,
         });
       }
@@ -1014,53 +1002,44 @@ class OrbMiningDiscordBot {
           { name: 'Motherload', value: `\`${formatORB(motherlode)}\``, inline: true },
         );
 
-      const linked = await getLinkedAccount(PLATFORM, discordId);
-      if (linked?.linked_at && linked?.telegram_id) {
-        try {
-          const rounds = await getUserRecentRounds(linked.telegram_id, 10);
-          const stats = await getUserRoundStats(linked.telegram_id);
+      try {
+        const rounds = await getUserRecentRounds(PLATFORM, discordId, 10);
+        const stats = await getUserRoundStats(PLATFORM, discordId);
 
-          if (rounds.length > 0) {
-            const roundsList = rounds.slice(0, 5).map(r => {
-              let status = '⏳';
-              if (r.winning_square >= 0) {
-                status = r.hit ? '✅' : '❌';
-              }
-              const squares = r.deployed_squares.map(ds => ds.square + 1).join(', ');
-              return `${status} **#${r.round_id}** - ${formatSOL(r.deployed_sol)} ${squares ? `(Sq: ${squares})` : ''}`;
-            }).join('\n');
-
-            embed.addFields({
-              name: 'Recent Rounds',
-              value: roundsList || 'No rounds yet',
-              inline: false,
-            });
-
-            if (stats.totalRounds > 0) {
-              embed.addFields({
-                name: 'Statistics',
-                value: `Rounds: \`${stats.totalRounds}\` | Hits: \`${stats.totalWins}\` | Rate: \`${stats.winRate.toFixed(1)}%\``,
-                inline: false,
-              });
+        if (rounds.length > 0) {
+          const roundsList = rounds.slice(0, 5).map(r => {
+            let status = '⏳';
+            if (r.winning_square >= 0) {
+              status = r.hit ? '✅' : '❌';
             }
-          } else {
+            const squares = r.deployed_squares.map(ds => ds.square + 1).join(', ');
+            return `${status} **#${r.round_id}** - ${formatSOL(r.deployed_sol)} ${squares ? `(Sq: ${squares})` : ''}`;
+          }).join('\n');
+
+          embed.addFields({
+            name: 'Recent Rounds',
+            value: roundsList || 'No rounds yet',
+            inline: false,
+          });
+
+          if (stats.totalRounds > 0) {
             embed.addFields({
-              name: 'Recent Rounds',
-              value: 'No rounds participated yet.',
+              name: 'Statistics',
+              value: `Rounds: \`${stats.totalRounds}\` | Hits: \`${stats.totalWins}\` | Rate: \`${stats.winRate.toFixed(1)}%\``,
               inline: false,
             });
           }
-        } catch (error) {
+        } else {
           embed.addFields({
-            name: 'Round History',
-            value: 'Unable to fetch round history.',
+            name: 'Recent Rounds',
+            value: 'No rounds participated yet. Start automation with `/automation start` to begin mining.',
             inline: false,
           });
         }
-      } else {
+      } catch (error) {
         embed.addFields({
           name: 'Round History',
-          value: 'Link your Telegram account with `/link` to see your round history.',
+          value: 'Unable to fetch round history.',
           inline: false,
         });
       }
@@ -2058,6 +2037,7 @@ class OrbMiningDiscordBot {
       await initializeLinkedAccountsTable();
       await initializeDiscordUsersTable();
       await initializeDiscordSettingsTable();
+      await initializeUserRoundsTable();
       logger.info('[Discord] Database initialized');
 
       await loadAndCacheConfig();
