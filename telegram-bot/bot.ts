@@ -175,6 +175,40 @@ class OrbMiningBot {
   }
 
   /**
+   * Safely edit or send a message, handling "message not modified" error
+   */
+  private async safeEditOrReply(
+    ctx: BotContext,
+    message: string,
+    keyboard: any,
+    edit: boolean
+  ): Promise<boolean> {
+    try {
+      if (edit && ctx.callbackQuery && ctx.callbackQuery.message) {
+        await ctx.editMessageText(message, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard,
+        });
+      } else {
+        await ctx.reply(message, {
+          parse_mode: 'Markdown',
+          reply_markup: keyboard,
+        });
+      }
+      return true;
+    } catch (error: any) {
+      // Handle "message not modified" error gracefully
+      if (error?.message?.includes('message is not modified')) {
+        if (ctx.callbackQuery) {
+          await ctx.answerCbQuery('No changes');
+        }
+        return true; // Not a real error
+      }
+      throw error; // Re-throw other errors
+    }
+  }
+
+  /**
    * Setup middleware for logging, error handling, and user authentication
    */
   private setupMiddleware() {
@@ -1829,17 +1863,7 @@ Auto-claim features are coming soon for multi-user support.`;
         ],
       };
 
-      if (edit && ctx.callbackQuery && ctx.callbackQuery.message) {
-        await ctx.editMessageText(message, {
-          parse_mode: 'Markdown',
-          reply_markup: keyboard,
-        });
-      } else {
-        await ctx.reply(message, {
-          parse_mode: 'Markdown',
-          reply_markup: keyboard,
-        });
-      }
+      await this.safeEditOrReply(ctx, message, keyboard, edit);
     } catch (error: any) {
       logger.error('[Telegram] Error in handleRounds:', error);
       await ctx.reply('Failed to fetch round history. Please try again.');
