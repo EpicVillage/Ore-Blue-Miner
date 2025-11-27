@@ -132,6 +132,10 @@ const commands = [
     ),
 
   new SlashCommandBuilder()
+    .setName('settings2')
+    .setDescription('[TEST] Interactive settings with buttons & dropdowns'),
+
+  new SlashCommandBuilder()
     .setName('link')
     .setDescription('Link your Telegram account')
     .addStringOption(opt =>
@@ -163,11 +167,24 @@ class OrbMiningDiscordBot {
   async registerCommands() {
     try {
       logger.info('[Discord] Registering slash commands...');
-      await this.rest.put(
-        Routes.applicationCommands(process.env.DISCORD_CLIENT_ID!),
-        { body: commands.map(cmd => cmd.toJSON()) }
-      );
-      logger.info('[Discord] Slash commands registered successfully');
+
+      const commandsJson = commands.map(cmd => cmd.toJSON());
+
+      // If DISCORD_GUILD_ID is set, register to that guild (instant updates for testing)
+      // Otherwise register globally (takes up to 1 hour to propagate)
+      if (process.env.DISCORD_GUILD_ID) {
+        await this.rest.put(
+          Routes.applicationGuildCommands(process.env.DISCORD_CLIENT_ID!, process.env.DISCORD_GUILD_ID),
+          { body: commandsJson }
+        );
+        logger.info(`[Discord] Slash commands registered to guild ${process.env.DISCORD_GUILD_ID}`);
+      } else {
+        await this.rest.put(
+          Routes.applicationCommands(process.env.DISCORD_CLIENT_ID!),
+          { body: commandsJson }
+        );
+        logger.info('[Discord] Slash commands registered globally (may take up to 1 hour)');
+      }
     } catch (error) {
       logger.error('[Discord] Failed to register commands:', error);
     }
@@ -218,6 +235,7 @@ class OrbMiningDiscordBot {
       case 'deploy': await this.handleDeploy(interaction); break;
       case 'swap': await this.handleSwap(interaction); break;
       case 'settings': await this.handleSettings(interaction); break;
+      case 'settings2': await this.handleSettings2(interaction); break;
       case 'link': await this.handleLink(interaction); break;
       case 'help': await this.handleHelp(interaction); break;
       default:
@@ -246,6 +264,14 @@ class OrbMiningDiscordBot {
       case 'automation_stop': await this.handleAutomationStopButton(interaction); break;
       case 'settings_mining': await this.showMiningSettingsModal(interaction); break;
       case 'settings_automation': await this.showAutomationSettingsModal(interaction); break;
+      // Settings2 interactive UI buttons
+      case 's2_cat_swap': await this.handleSettings2Category(interaction, 'swap'); break;
+      case 's2_cat_stake': await this.handleSettings2Category(interaction, 'stake'); break;
+      case 's2_cat_transfer': await this.handleSettings2Category(interaction, 'transfer'); break;
+      case 's2_cat_mining': await this.handleSettings2Category(interaction, 'mining'); break;
+      case 's2_back': await this.handleSettings2Back(interaction); break;
+      case 's2_toggle': await this.handleSettings2Toggle(interaction, params.join(':')); break;
+      case 's2_custom': await this.showSettings2CustomModal(interaction, params.join(':')); break;
       default:
         await interaction.reply({ content: 'Unknown action', ephemeral: true });
     }
@@ -258,14 +284,22 @@ class OrbMiningDiscordBot {
       case 'import_wallet_modal': await this.handleImportWalletSubmit(interaction); break;
       case 'mining_settings_modal': await this.handleMiningSettingsSubmit(interaction); break;
       case 'automation_settings_modal': await this.handleAutomationSettingsSubmit(interaction); break;
+      case 's2_custom_modal': await this.handleSettings2CustomSubmit(interaction); break;
       default:
         await interaction.reply({ content: 'Unknown modal', ephemeral: true });
     }
   }
 
   private async handleSelectMenu(interaction: StringSelectMenuInteraction) {
-    // For future select menu interactions
-    await interaction.reply({ content: 'Selection received', ephemeral: true });
+    const [action, ...params] = interaction.customId.split(':');
+
+    switch (action) {
+      case 's2_select':
+        await this.handleSettings2Select(interaction, params[0], interaction.values[0]);
+        break;
+      default:
+        await interaction.reply({ content: 'Selection received', ephemeral: true });
+    }
   }
 
   private async isUserRegistered(discordId: string): Promise<boolean> {
@@ -1113,6 +1147,686 @@ class OrbMiningDiscordBot {
       });
     } catch (error) {
       await interaction.editReply({ embeds: [formatErrorEmbed('Error', 'Failed to save settings.')] });
+    }
+  }
+
+  // ==================== SETTINGS2 INTERACTIVE UI ====================
+  private async handleSettings2(interaction: ChatInputCommandInteraction) {
+    const discordId = interaction.user.id;
+    if (!(await this.isUserRegistered(discordId))) {
+      return interaction.reply({
+        embeds: [formatErrorEmbed('Not Registered', 'Use `/start` first.')],
+        ephemeral: true,
+      });
+    }
+
+    await interaction.deferReply({ ephemeral: true });
+
+    try {
+      const settings = await getUserSettings(PLATFORM, discordId);
+      const embed = this.buildSettings2MainEmbed(settings);
+      const components = this.buildSettings2MainComponents();
+
+      await interaction.editReply({ embeds: [embed], components });
+    } catch (error) {
+      await interaction.editReply({ embeds: [formatErrorEmbed('Error', 'Failed to load settings.')] });
+    }
+  }
+
+  private buildSettings2MainEmbed(settings: any): EmbedBuilder {
+    return new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle('Settings (Interactive Mode)')
+      .setDescription('Select a category to configure:')
+      .addFields(
+        {
+          name: 'Swap',
+          value: `Auto-Swap: \`${settings.auto_swap_enabled ? 'ON' : 'OFF'}\` @ \`${settings.swap_threshold} ORB\``,
+          inline: true,
+        },
+        {
+          name: 'Stake',
+          value: `Auto-Stake: \`${settings.auto_stake_enabled ? 'ON' : 'OFF'}\` @ \`${settings.stake_threshold} ORB\``,
+          inline: true,
+        },
+        {
+          name: 'Transfer',
+          value: `Auto-Transfer: \`${settings.auto_transfer_enabled ? 'ON' : 'OFF'}\``,
+          inline: true,
+        },
+        {
+          name: 'Mining',
+          value: `Motherload: \`${settings.motherload_threshold} ORB\` | Budget: \`${settings.automation_budget_percent}%\``,
+          inline: true,
+        },
+      )
+      .setFooter({ text: 'Click a button below to configure that category' });
+  }
+
+  private buildSettings2MainComponents(): ActionRowBuilder<ButtonBuilder>[] {
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId('s2_cat_swap')
+        .setLabel('Swap')
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId('s2_cat_stake')
+        .setLabel('Stake')
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId('s2_cat_transfer')
+        .setLabel('Transfer')
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId('s2_cat_mining')
+        .setLabel('Mining')
+        .setStyle(ButtonStyle.Primary),
+    );
+    return [row];
+  }
+
+  private async handleSettings2Category(interaction: ButtonInteraction, category: string) {
+    const discordId = interaction.user.id;
+    await interaction.deferUpdate();
+
+    try {
+      const settings = await getUserSettings(PLATFORM, discordId);
+
+      let embed: EmbedBuilder;
+      let components: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[];
+
+      switch (category) {
+        case 'swap':
+          embed = new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('Swap Settings')
+            .addFields(
+              { name: 'Auto-Swap', value: settings.auto_swap_enabled ? '`ON`' : '`OFF`', inline: true },
+              { name: 'Threshold', value: `\`${settings.swap_threshold} ORB\``, inline: true },
+              { name: 'Slippage', value: `\`${settings.slippage_bps / 100}%\``, inline: true },
+              { name: 'Min Price', value: `\`$${settings.min_orb_price}\``, inline: true },
+              { name: 'Min Keep', value: `\`${settings.min_orb_to_keep} ORB\``, inline: true },
+            );
+
+          components = [
+            new ActionRowBuilder<ButtonBuilder>().addComponents(
+              new ButtonBuilder()
+                .setCustomId('s2_toggle:auto_swap_enabled')
+                .setLabel(settings.auto_swap_enabled ? 'Turn OFF' : 'Turn ON')
+                .setStyle(settings.auto_swap_enabled ? ButtonStyle.Danger : ButtonStyle.Success),
+            ),
+            new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+              new StringSelectMenuBuilder()
+                .setCustomId('s2_select:swap_threshold')
+                .setPlaceholder('Swap Threshold')
+                .addOptions([
+                  { label: '10 ORB', value: '10', description: 'Swap when 10+ ORB accumulated' },
+                  { label: '50 ORB', value: '50', description: 'Swap when 50+ ORB accumulated' },
+                  { label: '100 ORB', value: '100', description: 'Swap when 100+ ORB accumulated' },
+                  { label: 'Custom...', value: 'custom', description: 'Enter a specific amount' },
+                ]),
+            ),
+            new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+              new StringSelectMenuBuilder()
+                .setCustomId('s2_select:slippage_bps')
+                .setPlaceholder('Slippage Tolerance')
+                .addOptions([
+                  { label: '0.5%', value: '50', description: 'Low slippage (may fail more)' },
+                  { label: '1%', value: '100', description: 'Standard slippage' },
+                  { label: '3%', value: '300', description: 'Higher slippage (better success)' },
+                  { label: '5%', value: '500', description: 'Maximum slippage' },
+                ]),
+            ),
+            new ActionRowBuilder<ButtonBuilder>().addComponents(
+              new ButtonBuilder()
+                .setCustomId('s2_back')
+                .setLabel('← Back')
+                .setStyle(ButtonStyle.Secondary),
+              new ButtonBuilder()
+                .setCustomId('s2_custom:min_orb_price')
+                .setLabel('Set Min Price')
+                .setStyle(ButtonStyle.Secondary),
+              new ButtonBuilder()
+                .setCustomId('s2_custom:min_orb_to_keep')
+                .setLabel('Set Min Keep')
+                .setStyle(ButtonStyle.Secondary),
+            ),
+          ];
+          break;
+
+        case 'stake':
+          embed = new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('Stake Settings')
+            .addFields(
+              { name: 'Auto-Stake', value: settings.auto_stake_enabled ? '`ON`' : '`OFF`', inline: true },
+              { name: 'Threshold', value: `\`${settings.stake_threshold} ORB\``, inline: true },
+            );
+
+          components = [
+            new ActionRowBuilder<ButtonBuilder>().addComponents(
+              new ButtonBuilder()
+                .setCustomId('s2_toggle:auto_stake_enabled')
+                .setLabel(settings.auto_stake_enabled ? 'Turn OFF' : 'Turn ON')
+                .setStyle(settings.auto_stake_enabled ? ButtonStyle.Danger : ButtonStyle.Success),
+            ),
+            new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+              new StringSelectMenuBuilder()
+                .setCustomId('s2_select:stake_threshold')
+                .setPlaceholder('Stake Threshold')
+                .addOptions([
+                  { label: '10 ORB', value: '10', description: 'Stake when 10+ ORB accumulated' },
+                  { label: '25 ORB', value: '25', description: 'Stake when 25+ ORB accumulated' },
+                  { label: '50 ORB', value: '50', description: 'Stake when 50+ ORB accumulated' },
+                  { label: '100 ORB', value: '100', description: 'Stake when 100+ ORB accumulated' },
+                  { label: 'Custom...', value: 'custom', description: 'Enter a specific amount' },
+                ]),
+            ),
+            new ActionRowBuilder<ButtonBuilder>().addComponents(
+              new ButtonBuilder()
+                .setCustomId('s2_back')
+                .setLabel('← Back')
+                .setStyle(ButtonStyle.Secondary),
+            ),
+          ];
+          break;
+
+        case 'transfer':
+          embed = new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('Transfer Settings')
+            .addFields(
+              { name: 'Auto-Transfer', value: settings.auto_transfer_enabled ? '`ON`' : '`OFF`', inline: true },
+              { name: 'Threshold', value: `\`${settings.orb_transfer_threshold} ORB\``, inline: true },
+            );
+
+          components = [
+            new ActionRowBuilder<ButtonBuilder>().addComponents(
+              new ButtonBuilder()
+                .setCustomId('s2_toggle:auto_transfer_enabled')
+                .setLabel(settings.auto_transfer_enabled ? 'Turn OFF' : 'Turn ON')
+                .setStyle(settings.auto_transfer_enabled ? ButtonStyle.Danger : ButtonStyle.Success),
+            ),
+            new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+              new StringSelectMenuBuilder()
+                .setCustomId('s2_select:orb_transfer_threshold')
+                .setPlaceholder('Transfer Threshold')
+                .addOptions([
+                  { label: '50 ORB', value: '50', description: 'Transfer when 50+ ORB accumulated' },
+                  { label: '100 ORB', value: '100', description: 'Transfer when 100+ ORB accumulated' },
+                  { label: '250 ORB', value: '250', description: 'Transfer when 250+ ORB accumulated' },
+                  { label: '500 ORB', value: '500', description: 'Transfer when 500+ ORB accumulated' },
+                  { label: 'Custom...', value: 'custom', description: 'Enter a specific amount' },
+                ]),
+            ),
+            new ActionRowBuilder<ButtonBuilder>().addComponents(
+              new ButtonBuilder()
+                .setCustomId('s2_back')
+                .setLabel('← Back')
+                .setStyle(ButtonStyle.Secondary),
+            ),
+          ];
+          break;
+
+        case 'mining':
+          embed = new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setTitle('Mining Settings')
+            .addFields(
+              { name: 'Motherload Threshold', value: `\`${settings.motherload_threshold} ORB\``, inline: true },
+              { name: 'SOL per Block', value: `\`${settings.sol_per_block}\``, inline: true },
+              { name: 'Blocks per Round', value: `\`${settings.num_blocks}\``, inline: true },
+              { name: 'Budget Allocation', value: `\`${settings.automation_budget_percent}%\``, inline: true },
+              { name: 'Auto-Claim SOL', value: `\`${settings.auto_claim_sol_threshold}\``, inline: true },
+              { name: 'Auto-Claim ORB', value: `\`${settings.auto_claim_orb_threshold}\``, inline: true },
+            );
+
+          components = [
+            new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+              new StringSelectMenuBuilder()
+                .setCustomId('s2_select:motherload_threshold')
+                .setPlaceholder('Motherload Threshold')
+                .addOptions([
+                  { label: '50 ORB', value: '50', description: 'Mine when motherload ≥ 50 ORB' },
+                  { label: '100 ORB', value: '100', description: 'Mine when motherload ≥ 100 ORB' },
+                  { label: '200 ORB', value: '200', description: 'Mine when motherload ≥ 200 ORB' },
+                  { label: '500 ORB', value: '500', description: 'Mine when motherload ≥ 500 ORB' },
+                  { label: 'Custom...', value: 'custom', description: 'Enter a specific amount' },
+                ]),
+            ),
+            new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+              new StringSelectMenuBuilder()
+                .setCustomId('s2_select:automation_budget_percent')
+                .setPlaceholder('Budget Allocation')
+                .addOptions([
+                  { label: '50%', value: '50', description: 'Use 50% of balance for automation' },
+                  { label: '75%', value: '75', description: 'Use 75% of balance for automation' },
+                  { label: '90%', value: '90', description: 'Use 90% of balance for automation' },
+                  { label: '100%', value: '100', description: 'Use all balance for automation' },
+                  { label: 'Custom...', value: 'custom', description: 'Enter a specific percentage' },
+                ]),
+            ),
+            new ActionRowBuilder<ButtonBuilder>().addComponents(
+              new ButtonBuilder()
+                .setCustomId('s2_back')
+                .setLabel('← Back')
+                .setStyle(ButtonStyle.Secondary),
+              new ButtonBuilder()
+                .setCustomId('s2_custom:sol_per_block')
+                .setLabel('SOL/Block')
+                .setStyle(ButtonStyle.Secondary),
+              new ButtonBuilder()
+                .setCustomId('s2_custom:num_blocks')
+                .setLabel('Blocks')
+                .setStyle(ButtonStyle.Secondary),
+              new ButtonBuilder()
+                .setCustomId('s2_custom:auto_claim_thresholds')
+                .setLabel('Claim Thresholds')
+                .setStyle(ButtonStyle.Secondary),
+            ),
+          ];
+          break;
+
+        default:
+          return;
+      }
+
+      await interaction.editReply({ embeds: [embed], components: components as any });
+    } catch (error) {
+      logger.error('[Discord] Error in settings2 category:', error);
+    }
+  }
+
+  private async handleSettings2Back(interaction: ButtonInteraction) {
+    const discordId = interaction.user.id;
+    await interaction.deferUpdate();
+
+    try {
+      const settings = await getUserSettings(PLATFORM, discordId);
+      const embed = this.buildSettings2MainEmbed(settings);
+      const components = this.buildSettings2MainComponents();
+
+      await interaction.editReply({ embeds: [embed], components });
+    } catch (error) {
+      logger.error('[Discord] Error going back to settings2:', error);
+    }
+  }
+
+  private async handleSettings2Toggle(interaction: ButtonInteraction, setting: string) {
+    const discordId = interaction.user.id;
+    await interaction.deferUpdate();
+
+    try {
+      const settings = await getUserSettings(PLATFORM, discordId);
+
+      let currentValue: boolean;
+      let category: string;
+
+      switch (setting) {
+        case 'auto_swap_enabled':
+          currentValue = settings.auto_swap_enabled;
+          category = 'swap';
+          break;
+        case 'auto_stake_enabled':
+          currentValue = settings.auto_stake_enabled;
+          category = 'stake';
+          break;
+        case 'auto_transfer_enabled':
+          currentValue = settings.auto_transfer_enabled;
+          category = 'transfer';
+          break;
+        default:
+          return;
+      }
+
+      // Toggle the value
+      await updateUserSetting(PLATFORM, discordId, setting, currentValue ? 0 : 1);
+
+      // Refresh the category view
+      const updatedSettings = await getUserSettings(PLATFORM, discordId);
+      await this.refreshCategoryView(interaction, category, updatedSettings);
+    } catch (error) {
+      logger.error('[Discord] Error toggling setting:', error);
+    }
+  }
+
+  private async handleSettings2Select(interaction: StringSelectMenuInteraction, setting: string, value: string) {
+    const discordId = interaction.user.id;
+
+    if (value === 'custom') {
+      // Show custom input modal
+      await this.showSettings2CustomModal(interaction, setting);
+      return;
+    }
+
+    await interaction.deferUpdate();
+
+    try {
+      const numValue = parseFloat(value);
+      await updateUserSetting(PLATFORM, discordId, setting, numValue);
+
+      // Determine category and refresh
+      const category = this.getSettingCategory(setting);
+      const settings = await getUserSettings(PLATFORM, discordId);
+      await this.refreshCategoryView(interaction, category, settings);
+    } catch (error) {
+      logger.error('[Discord] Error updating setting:', error);
+    }
+  }
+
+  private getSettingCategory(setting: string): string {
+    const swapSettings = ['swap_threshold', 'slippage_bps', 'min_orb_price', 'min_orb_to_keep'];
+    const stakeSettings = ['stake_threshold'];
+    const transferSettings = ['orb_transfer_threshold'];
+
+    if (swapSettings.includes(setting)) return 'swap';
+    if (stakeSettings.includes(setting)) return 'stake';
+    if (transferSettings.includes(setting)) return 'transfer';
+    return 'mining';
+  }
+
+  private async refreshCategoryView(
+    interaction: ButtonInteraction | StringSelectMenuInteraction,
+    category: string,
+    settings: any
+  ) {
+    // Rebuild the category embed and components
+    let embed: EmbedBuilder;
+    let components: ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>[];
+
+    switch (category) {
+      case 'swap':
+        embed = new EmbedBuilder()
+          .setColor(0x57F287)
+          .setTitle('Swap Settings ✓')
+          .setDescription('Setting updated!')
+          .addFields(
+            { name: 'Auto-Swap', value: settings.auto_swap_enabled ? '`ON`' : '`OFF`', inline: true },
+            { name: 'Threshold', value: `\`${settings.swap_threshold} ORB\``, inline: true },
+            { name: 'Slippage', value: `\`${settings.slippage_bps / 100}%\``, inline: true },
+            { name: 'Min Price', value: `\`$${settings.min_orb_price}\``, inline: true },
+            { name: 'Min Keep', value: `\`${settings.min_orb_to_keep} ORB\``, inline: true },
+          );
+
+        components = [
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+              .setCustomId('s2_toggle:auto_swap_enabled')
+              .setLabel(settings.auto_swap_enabled ? 'Turn OFF' : 'Turn ON')
+              .setStyle(settings.auto_swap_enabled ? ButtonStyle.Danger : ButtonStyle.Success),
+          ),
+          new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+            new StringSelectMenuBuilder()
+              .setCustomId('s2_select:swap_threshold')
+              .setPlaceholder('Swap Threshold')
+              .addOptions([
+                { label: '10 ORB', value: '10' },
+                { label: '50 ORB', value: '50' },
+                { label: '100 ORB', value: '100' },
+                { label: 'Custom...', value: 'custom' },
+              ]),
+          ),
+          new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+            new StringSelectMenuBuilder()
+              .setCustomId('s2_select:slippage_bps')
+              .setPlaceholder('Slippage Tolerance')
+              .addOptions([
+                { label: '0.5%', value: '50' },
+                { label: '1%', value: '100' },
+                { label: '3%', value: '300' },
+                { label: '5%', value: '500' },
+              ]),
+          ),
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+              .setCustomId('s2_back')
+              .setLabel('← Back')
+              .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+              .setCustomId('s2_custom:min_orb_price')
+              .setLabel('Set Min Price')
+              .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+              .setCustomId('s2_custom:min_orb_to_keep')
+              .setLabel('Set Min Keep')
+              .setStyle(ButtonStyle.Secondary),
+          ),
+        ];
+        break;
+
+      case 'stake':
+        embed = new EmbedBuilder()
+          .setColor(0x57F287)
+          .setTitle('Stake Settings ✓')
+          .setDescription('Setting updated!')
+          .addFields(
+            { name: 'Auto-Stake', value: settings.auto_stake_enabled ? '`ON`' : '`OFF`', inline: true },
+            { name: 'Threshold', value: `\`${settings.stake_threshold} ORB\``, inline: true },
+          );
+
+        components = [
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+              .setCustomId('s2_toggle:auto_stake_enabled')
+              .setLabel(settings.auto_stake_enabled ? 'Turn OFF' : 'Turn ON')
+              .setStyle(settings.auto_stake_enabled ? ButtonStyle.Danger : ButtonStyle.Success),
+          ),
+          new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+            new StringSelectMenuBuilder()
+              .setCustomId('s2_select:stake_threshold')
+              .setPlaceholder('Stake Threshold')
+              .addOptions([
+                { label: '10 ORB', value: '10' },
+                { label: '25 ORB', value: '25' },
+                { label: '50 ORB', value: '50' },
+                { label: '100 ORB', value: '100' },
+                { label: 'Custom...', value: 'custom' },
+              ]),
+          ),
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+              .setCustomId('s2_back')
+              .setLabel('← Back')
+              .setStyle(ButtonStyle.Secondary),
+          ),
+        ];
+        break;
+
+      case 'transfer':
+        embed = new EmbedBuilder()
+          .setColor(0x57F287)
+          .setTitle('Transfer Settings ✓')
+          .setDescription('Setting updated!')
+          .addFields(
+            { name: 'Auto-Transfer', value: settings.auto_transfer_enabled ? '`ON`' : '`OFF`', inline: true },
+            { name: 'Threshold', value: `\`${settings.orb_transfer_threshold} ORB\``, inline: true },
+          );
+
+        components = [
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+              .setCustomId('s2_toggle:auto_transfer_enabled')
+              .setLabel(settings.auto_transfer_enabled ? 'Turn OFF' : 'Turn ON')
+              .setStyle(settings.auto_transfer_enabled ? ButtonStyle.Danger : ButtonStyle.Success),
+          ),
+          new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+            new StringSelectMenuBuilder()
+              .setCustomId('s2_select:orb_transfer_threshold')
+              .setPlaceholder('Transfer Threshold')
+              .addOptions([
+                { label: '50 ORB', value: '50' },
+                { label: '100 ORB', value: '100' },
+                { label: '250 ORB', value: '250' },
+                { label: '500 ORB', value: '500' },
+                { label: 'Custom...', value: 'custom' },
+              ]),
+          ),
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+              .setCustomId('s2_back')
+              .setLabel('← Back')
+              .setStyle(ButtonStyle.Secondary),
+          ),
+        ];
+        break;
+
+      case 'mining':
+        embed = new EmbedBuilder()
+          .setColor(0x57F287)
+          .setTitle('Mining Settings ✓')
+          .setDescription('Setting updated!')
+          .addFields(
+            { name: 'Motherload Threshold', value: `\`${settings.motherload_threshold} ORB\``, inline: true },
+            { name: 'SOL per Block', value: `\`${settings.sol_per_block}\``, inline: true },
+            { name: 'Blocks per Round', value: `\`${settings.num_blocks}\``, inline: true },
+            { name: 'Budget Allocation', value: `\`${settings.automation_budget_percent}%\``, inline: true },
+            { name: 'Auto-Claim SOL', value: `\`${settings.auto_claim_sol_threshold}\``, inline: true },
+            { name: 'Auto-Claim ORB', value: `\`${settings.auto_claim_orb_threshold}\``, inline: true },
+          );
+
+        components = [
+          new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+            new StringSelectMenuBuilder()
+              .setCustomId('s2_select:motherload_threshold')
+              .setPlaceholder('Motherload Threshold')
+              .addOptions([
+                { label: '50 ORB', value: '50' },
+                { label: '100 ORB', value: '100' },
+                { label: '200 ORB', value: '200' },
+                { label: '500 ORB', value: '500' },
+                { label: 'Custom...', value: 'custom' },
+              ]),
+          ),
+          new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+            new StringSelectMenuBuilder()
+              .setCustomId('s2_select:automation_budget_percent')
+              .setPlaceholder('Budget Allocation')
+              .addOptions([
+                { label: '50%', value: '50' },
+                { label: '75%', value: '75' },
+                { label: '90%', value: '90' },
+                { label: '100%', value: '100' },
+                { label: 'Custom...', value: 'custom' },
+              ]),
+          ),
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+              .setCustomId('s2_back')
+              .setLabel('← Back')
+              .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+              .setCustomId('s2_custom:sol_per_block')
+              .setLabel('SOL/Block')
+              .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+              .setCustomId('s2_custom:num_blocks')
+              .setLabel('Blocks')
+              .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+              .setCustomId('s2_custom:auto_claim_thresholds')
+              .setLabel('Claim Thresholds')
+              .setStyle(ButtonStyle.Secondary),
+          ),
+        ];
+        break;
+
+      default:
+        return;
+    }
+
+    await interaction.editReply({ embeds: [embed], components: components as any });
+  }
+
+  private async showSettings2CustomModal(
+    interaction: ButtonInteraction | StringSelectMenuInteraction,
+    setting: string
+  ) {
+    const modal = new ModalBuilder()
+      .setCustomId(`s2_custom_modal:${setting}`)
+      .setTitle('Custom Value');
+
+    let label: string;
+    let placeholder: string;
+
+    switch (setting) {
+      case 'swap_threshold':
+        label = 'Swap Threshold (ORB)';
+        placeholder = '100';
+        break;
+      case 'stake_threshold':
+        label = 'Stake Threshold (ORB)';
+        placeholder = '50';
+        break;
+      case 'orb_transfer_threshold':
+        label = 'Transfer Threshold (ORB)';
+        placeholder = '100';
+        break;
+      case 'motherload_threshold':
+        label = 'Motherload Threshold (ORB)';
+        placeholder = '100';
+        break;
+      case 'automation_budget_percent':
+        label = 'Budget Allocation (%)';
+        placeholder = '90';
+        break;
+      case 'min_orb_price':
+        label = 'Minimum ORB Price ($)';
+        placeholder = '30';
+        break;
+      case 'min_orb_to_keep':
+        label = 'Minimum ORB to Keep';
+        placeholder = '0';
+        break;
+      case 'sol_per_block':
+        label = 'SOL per Block';
+        placeholder = '0.001';
+        break;
+      case 'num_blocks':
+        label = 'Number of Blocks';
+        placeholder = '10';
+        break;
+      case 'auto_claim_thresholds':
+        label = 'SOL Threshold, ORB Threshold (comma sep)';
+        placeholder = '0.1, 1.0';
+        break;
+      default:
+        label = 'Value';
+        placeholder = '0';
+    }
+
+    const valueInput = new TextInputBuilder()
+      .setCustomId('value')
+      .setLabel(label)
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder(placeholder)
+      .setRequired(true);
+
+    modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(valueInput));
+    await interaction.showModal(modal);
+  }
+
+  private async handleSettings2CustomSubmit(interaction: ModalSubmitInteraction) {
+    await interaction.deferUpdate();
+    const discordId = interaction.user.id;
+    const setting = interaction.customId.split(':')[1];
+    const value = interaction.fields.getTextInputValue('value');
+
+    try {
+      if (setting === 'auto_claim_thresholds') {
+        // Handle compound setting
+        const [solThreshold, orbThreshold] = value.split(',').map(s => parseFloat(s.trim()));
+        await updateUserSetting(PLATFORM, discordId, 'auto_claim_sol_threshold', solThreshold || 0.1);
+        await updateUserSetting(PLATFORM, discordId, 'auto_claim_orb_threshold', orbThreshold || 1.0);
+      } else {
+        const numValue = parseFloat(value);
+        await updateUserSetting(PLATFORM, discordId, setting, numValue);
+      }
+
+      const category = this.getSettingCategory(setting);
+      const settings = await getUserSettings(PLATFORM, discordId);
+      await this.refreshCategoryView(interaction as any, category, settings);
+    } catch (error) {
+      logger.error('[Discord] Error saving custom setting:', error);
     }
   }
 
