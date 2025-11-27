@@ -124,7 +124,7 @@ export async function loadConfigWithDB(): Promise<Config> {
       // Wallet & Network
       // Note: PRIVATE_KEY may be empty on first run - wizard will handle this
       privateKey: getSettingValue(dbSettings, 'PRIVATE_KEY', ''),
-      rpcEndpoint: getSettingValue(dbSettings, 'RPC_ENDPOINT', 'https://api.mainnet-beta.solana.com'),
+      rpcEndpoint: process.env.SOLANA_RPC_URL || getSettingValue(dbSettings, 'RPC_ENDPOINT', 'https://api.mainnet-beta.solana.com'),
       orbProgramId: new PublicKey(getSettingValue(dbSettings, 'ORB_PROGRAM_ID', 'boreXQWsKpsJz5RR9BMtN8Vk4ndAk23sutj8spWYhwk')),
       orbTokenMint: new PublicKey(getSettingValue(dbSettings, 'ORB_TOKEN_MINT', 'orebyr4mDiPDVgnfqvF5xiu5gKnh94Szuz8dqgNqdJn')),
       orbFeeCollector: new PublicKey(getSettingValue(dbSettings, 'ORB_FEE_COLLECTOR', '9LGAtUrQx8u3YXF5traoUtFBN3w62bgqohLc1Npkh3Yq')),
