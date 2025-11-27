@@ -120,20 +120,7 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('settings')
-    .setDescription('View and manage your settings')
-    .addSubcommand(sub =>
-      sub.setName('view').setDescription('View your current settings')
-    )
-    .addSubcommand(sub =>
-      sub.setName('mining').setDescription('Configure mining & claim settings')
-    )
-    .addSubcommand(sub =>
-      sub.setName('automation').setDescription('Configure swap, stake & transfer settings')
-    ),
-
-  new SlashCommandBuilder()
-    .setName('settings2')
-    .setDescription('[TEST] Interactive settings with buttons & dropdowns'),
+    .setDescription('View and manage your settings'),
 
   new SlashCommandBuilder()
     .setName('link')
@@ -235,7 +222,6 @@ class OrbMiningDiscordBot {
       case 'deploy': await this.handleDeploy(interaction); break;
       case 'swap': await this.handleSwap(interaction); break;
       case 'settings': await this.handleSettings(interaction); break;
-      case 'settings2': await this.handleSettings2(interaction); break;
       case 'link': await this.handleLink(interaction); break;
       case 'help': await this.handleHelp(interaction); break;
       default:
@@ -262,16 +248,14 @@ class OrbMiningDiscordBot {
       case 'claim_orb': await this.handleClaimOrbButton(interaction); break;
       case 'automation_start': await this.handleAutomationStartButton(interaction); break;
       case 'automation_stop': await this.handleAutomationStopButton(interaction); break;
-      case 'settings_mining': await this.showMiningSettingsModal(interaction); break;
-      case 'settings_automation': await this.showAutomationSettingsModal(interaction); break;
-      // Settings2 interactive UI buttons
-      case 's2_cat_swap': await this.handleSettings2Category(interaction, 'swap'); break;
-      case 's2_cat_stake': await this.handleSettings2Category(interaction, 'stake'); break;
-      case 's2_cat_transfer': await this.handleSettings2Category(interaction, 'transfer'); break;
-      case 's2_cat_mining': await this.handleSettings2Category(interaction, 'mining'); break;
-      case 's2_back': await this.handleSettings2Back(interaction); break;
-      case 's2_toggle': await this.handleSettings2Toggle(interaction, params.join(':')); break;
-      case 's2_custom': await this.showSettings2CustomModal(interaction, params.join(':')); break;
+      // Settings interactive UI buttons
+      case 's2_cat_swap': await this.handleSettingsCategory(interaction, 'swap'); break;
+      case 's2_cat_stake': await this.handleSettingsCategory(interaction, 'stake'); break;
+      case 's2_cat_transfer': await this.handleSettingsCategory(interaction, 'transfer'); break;
+      case 's2_cat_mining': await this.handleSettingsCategory(interaction, 'mining'); break;
+      case 's2_back': await this.handleSettingsBack(interaction); break;
+      case 's2_toggle': await this.handleSettingsToggle(interaction, params.join(':')); break;
+      case 's2_custom': await this.showSettingsCustomModal(interaction, params.join(':')); break;
       default:
         await interaction.reply({ content: 'Unknown action', ephemeral: true });
     }
@@ -282,9 +266,7 @@ class OrbMiningDiscordBot {
 
     switch (action) {
       case 'import_wallet_modal': await this.handleImportWalletSubmit(interaction); break;
-      case 'mining_settings_modal': await this.handleMiningSettingsSubmit(interaction); break;
-      case 'automation_settings_modal': await this.handleAutomationSettingsSubmit(interaction); break;
-      case 's2_custom_modal': await this.handleSettings2CustomSubmit(interaction); break;
+      case 's2_custom_modal': await this.handleSettingsCustomSubmit(interaction); break;
       default:
         await interaction.reply({ content: 'Unknown modal', ephemeral: true });
     }
@@ -295,7 +277,7 @@ class OrbMiningDiscordBot {
 
     switch (action) {
       case 's2_select':
-        await this.handleSettings2Select(interaction, params[0], interaction.values[0]);
+        await this.handleSettingsSelect(interaction, params[0], interaction.values[0]);
         break;
       default:
         await interaction.reply({ content: 'Selection received', ephemeral: true });
@@ -896,262 +878,8 @@ class OrbMiningDiscordBot {
     }
   }
 
-  // ==================== SETTINGS ====================
+  // ==================== SETTINGS (INTERACTIVE UI) ====================
   private async handleSettings(interaction: ChatInputCommandInteraction) {
-    const subcommand = interaction.options.getSubcommand();
-    const discordId = interaction.user.id;
-
-    if (!(await this.isUserRegistered(discordId))) {
-      return interaction.reply({
-        embeds: [formatErrorEmbed('Not Registered', 'Use `/start` first.')],
-        ephemeral: true,
-      });
-    }
-
-    if (subcommand === 'view') {
-      await interaction.deferReply();
-      try {
-        const settings = await getUserSettings(PLATFORM, discordId);
-        const embed = new EmbedBuilder()
-          .setColor(0x5865F2)
-          .setTitle('Your Settings')
-          .addFields(
-            {
-              name: 'Mining & Claims',
-              value:
-                `Motherload: \`${settings.motherload_threshold} ORB\`\n` +
-                `SOL/Block: \`${settings.sol_per_block}\` | Blocks: \`${settings.num_blocks}\`\n` +
-                `Budget: \`${settings.automation_budget_percent}%\`\n` +
-                `Claim SOL: \`${settings.auto_claim_sol_threshold}\` | ORB: \`${settings.auto_claim_orb_threshold}\``,
-              inline: true,
-            },
-            {
-              name: 'Swap, Stake & Transfer',
-              value:
-                `Auto-Swap: \`${settings.auto_swap_enabled ? 'ON' : 'OFF'}\` @ \`${settings.swap_threshold} ORB\`\n` +
-                `Slippage: \`${settings.slippage_bps / 100}%\`\n` +
-                `Auto-Stake: \`${settings.auto_stake_enabled ? 'ON' : 'OFF'}\` @ \`${settings.stake_threshold} ORB\`\n` +
-                `Auto-Transfer: \`${settings.auto_transfer_enabled ? 'ON' : 'OFF'}\``,
-              inline: true,
-            },
-          );
-
-        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-          new ButtonBuilder()
-            .setCustomId('settings_mining')
-            .setLabel('Mining & Claims')
-            .setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder()
-            .setCustomId('settings_automation')
-            .setLabel('Swap & Stake')
-            .setStyle(ButtonStyle.Secondary),
-        );
-
-        await interaction.editReply({ embeds: [embed], components: [row] });
-      } catch (error) {
-        await interaction.editReply({ embeds: [formatErrorEmbed('Error', 'Failed to load settings.')] });
-      }
-    } else if (subcommand === 'mining') {
-      await this.showMiningSettingsModal(interaction as any);
-    } else if (subcommand === 'automation') {
-      await this.showAutomationSettingsModal(interaction as any);
-    }
-  }
-
-  private async showMiningSettingsModal(interaction: ButtonInteraction | ChatInputCommandInteraction) {
-    const discordId = interaction.user.id;
-    const settings = await getUserSettings(PLATFORM, discordId);
-
-    const modal = new ModalBuilder()
-      .setCustomId('mining_settings_modal')
-      .setTitle('Mining & Claim Settings');
-
-    const motherloadInput = new TextInputBuilder()
-      .setCustomId('motherload_threshold')
-      .setLabel('Motherload Threshold (ORB)')
-      .setStyle(TextInputStyle.Short)
-      .setValue(String(settings.motherload_threshold))
-      .setRequired(true);
-
-    const miningInput = new TextInputBuilder()
-      .setCustomId('mining_config')
-      .setLabel('SOL per Block, Number of Blocks (comma sep)')
-      .setStyle(TextInputStyle.Short)
-      .setValue(`${settings.sol_per_block}, ${settings.num_blocks}`)
-      .setPlaceholder('0.001, 10')
-      .setRequired(true);
-
-    const budgetInput = new TextInputBuilder()
-      .setCustomId('automation_budget_percent')
-      .setLabel('Automation Budget (%)')
-      .setStyle(TextInputStyle.Short)
-      .setValue(String(settings.automation_budget_percent))
-      .setRequired(true);
-
-    const autoClaimSolInput = new TextInputBuilder()
-      .setCustomId('auto_claim_sol_threshold')
-      .setLabel('Auto-Claim SOL Threshold')
-      .setStyle(TextInputStyle.Short)
-      .setValue(String(settings.auto_claim_sol_threshold))
-      .setRequired(true);
-
-    const autoClaimOrbInput = new TextInputBuilder()
-      .setCustomId('auto_claim_orb_threshold')
-      .setLabel('Auto-Claim ORB Threshold')
-      .setStyle(TextInputStyle.Short)
-      .setValue(String(settings.auto_claim_orb_threshold))
-      .setRequired(true);
-
-    modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(motherloadInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(miningInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(budgetInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(autoClaimSolInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(autoClaimOrbInput),
-    );
-
-    await interaction.showModal(modal);
-  }
-
-  private async handleMiningSettingsSubmit(interaction: ModalSubmitInteraction) {
-    await interaction.deferReply({ ephemeral: true });
-    const discordId = interaction.user.id;
-
-    try {
-      const motherload = parseFloat(interaction.fields.getTextInputValue('motherload_threshold'));
-      const miningConfig = interaction.fields.getTextInputValue('mining_config').split(',').map(s => s.trim());
-      const solPerBlock = parseFloat(miningConfig[0] || '0.001');
-      const numBlocks = parseInt(miningConfig[1] || '10');
-      const budget = parseFloat(interaction.fields.getTextInputValue('automation_budget_percent'));
-      const autoClaimSol = parseFloat(interaction.fields.getTextInputValue('auto_claim_sol_threshold'));
-      const autoClaimOrb = parseFloat(interaction.fields.getTextInputValue('auto_claim_orb_threshold'));
-
-      await updateUserSetting(PLATFORM, discordId, 'motherload_threshold', motherload);
-      await updateUserSetting(PLATFORM, discordId, 'sol_per_block', solPerBlock);
-      await updateUserSetting(PLATFORM, discordId, 'num_blocks', numBlocks);
-      await updateUserSetting(PLATFORM, discordId, 'automation_budget_percent', budget);
-      await updateUserSetting(PLATFORM, discordId, 'auto_claim_sol_threshold', autoClaimSol);
-      await updateUserSetting(PLATFORM, discordId, 'auto_claim_orb_threshold', autoClaimOrb);
-
-      await interaction.editReply({
-        embeds: [formatSuccessEmbed('Settings Updated',
-          `Motherload: ${motherload} ORB\n` +
-          `Mining: ${solPerBlock} SOL x ${numBlocks} blocks\n` +
-          `Budget: ${budget}%\n` +
-          `Auto-Claim: ${autoClaimSol} SOL, ${autoClaimOrb} ORB`
-        )],
-      });
-    } catch (error) {
-      await interaction.editReply({ embeds: [formatErrorEmbed('Error', 'Failed to save settings.')] });
-    }
-  }
-
-  private async showAutomationSettingsModal(interaction: ButtonInteraction | ChatInputCommandInteraction) {
-    const discordId = interaction.user.id;
-    const settings = await getUserSettings(PLATFORM, discordId);
-
-    const modal = new ModalBuilder()
-      .setCustomId('automation_settings_modal')
-      .setTitle('Swap, Stake & Transfer Settings');
-
-    const swapInput = new TextInputBuilder()
-      .setCustomId('swap_config')
-      .setLabel('Auto-Swap: enabled (1/0), threshold, slippage bps')
-      .setStyle(TextInputStyle.Short)
-      .setValue(`${settings.auto_swap_enabled ? '1' : '0'}, ${settings.swap_threshold}, ${settings.slippage_bps}`)
-      .setPlaceholder('1, 100, 300')
-      .setRequired(true);
-
-    const stakeInput = new TextInputBuilder()
-      .setCustomId('stake_config')
-      .setLabel('Auto-Stake: enabled (1/0), threshold ORB')
-      .setStyle(TextInputStyle.Short)
-      .setValue(`${settings.auto_stake_enabled ? '1' : '0'}, ${settings.stake_threshold}`)
-      .setPlaceholder('0, 50')
-      .setRequired(true);
-
-    const transferInput = new TextInputBuilder()
-      .setCustomId('transfer_config')
-      .setLabel('Auto-Transfer: enabled (1/0), threshold ORB')
-      .setStyle(TextInputStyle.Short)
-      .setValue(`${settings.auto_transfer_enabled ? '1' : '0'}, ${settings.orb_transfer_threshold}`)
-      .setPlaceholder('0, 100')
-      .setRequired(true);
-
-    const minOrbInput = new TextInputBuilder()
-      .setCustomId('min_orb_to_keep')
-      .setLabel('Minimum ORB to Keep (for swaps)')
-      .setStyle(TextInputStyle.Short)
-      .setValue(String(settings.min_orb_to_keep))
-      .setRequired(true);
-
-    const minPriceInput = new TextInputBuilder()
-      .setCustomId('min_orb_price')
-      .setLabel('Minimum ORB Price for Swap ($)')
-      .setStyle(TextInputStyle.Short)
-      .setValue(String(settings.min_orb_price))
-      .setRequired(true);
-
-    modal.addComponents(
-      new ActionRowBuilder<TextInputBuilder>().addComponents(swapInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(stakeInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(transferInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(minOrbInput),
-      new ActionRowBuilder<TextInputBuilder>().addComponents(minPriceInput),
-    );
-
-    await interaction.showModal(modal);
-  }
-
-  private async handleAutomationSettingsSubmit(interaction: ModalSubmitInteraction) {
-    await interaction.deferReply({ ephemeral: true });
-    const discordId = interaction.user.id;
-
-    try {
-      // Parse swap config
-      const swapConfig = interaction.fields.getTextInputValue('swap_config').split(',').map(s => s.trim());
-      const autoSwap = swapConfig[0] === '1' ? 1 : 0;
-      const swapThreshold = parseFloat(swapConfig[1] || '100');
-      const slippage = parseInt(swapConfig[2] || '300');
-
-      // Parse stake config
-      const stakeConfig = interaction.fields.getTextInputValue('stake_config').split(',').map(s => s.trim());
-      const autoStake = stakeConfig[0] === '1' ? 1 : 0;
-      const stakeThreshold = parseFloat(stakeConfig[1] || '50');
-
-      // Parse transfer config
-      const transferConfig = interaction.fields.getTextInputValue('transfer_config').split(',').map(s => s.trim());
-      const autoTransfer = transferConfig[0] === '1' ? 1 : 0;
-      const transferThreshold = parseFloat(transferConfig[1] || '100');
-
-      const minOrbToKeep = parseFloat(interaction.fields.getTextInputValue('min_orb_to_keep'));
-      const minOrbPrice = parseFloat(interaction.fields.getTextInputValue('min_orb_price'));
-
-      await updateUserSetting(PLATFORM, discordId, 'auto_swap_enabled', autoSwap);
-      await updateUserSetting(PLATFORM, discordId, 'swap_threshold', swapThreshold);
-      await updateUserSetting(PLATFORM, discordId, 'slippage_bps', slippage);
-      await updateUserSetting(PLATFORM, discordId, 'auto_stake_enabled', autoStake);
-      await updateUserSetting(PLATFORM, discordId, 'stake_threshold', stakeThreshold);
-      await updateUserSetting(PLATFORM, discordId, 'auto_transfer_enabled', autoTransfer);
-      await updateUserSetting(PLATFORM, discordId, 'orb_transfer_threshold', transferThreshold);
-      await updateUserSetting(PLATFORM, discordId, 'min_orb_to_keep', minOrbToKeep);
-      await updateUserSetting(PLATFORM, discordId, 'min_orb_price', minOrbPrice);
-
-      await interaction.editReply({
-        embeds: [formatSuccessEmbed('Settings Updated',
-          `Auto-Swap: ${autoSwap ? 'ON' : 'OFF'} @ ${swapThreshold} ORB (${slippage/100}% slip)\n` +
-          `Auto-Stake: ${autoStake ? 'ON' : 'OFF'} @ ${stakeThreshold} ORB\n` +
-          `Auto-Transfer: ${autoTransfer ? 'ON' : 'OFF'} @ ${transferThreshold} ORB\n` +
-          `Min Keep: ${minOrbToKeep} ORB | Min Price: $${minOrbPrice}`
-        )],
-      });
-    } catch (error) {
-      await interaction.editReply({ embeds: [formatErrorEmbed('Error', 'Failed to save settings.')] });
-    }
-  }
-
-  // ==================== SETTINGS2 INTERACTIVE UI ====================
-  private async handleSettings2(interaction: ChatInputCommandInteraction) {
     const discordId = interaction.user.id;
     if (!(await this.isUserRegistered(discordId))) {
       return interaction.reply({
@@ -1164,8 +892,8 @@ class OrbMiningDiscordBot {
 
     try {
       const settings = await getUserSettings(PLATFORM, discordId);
-      const embed = this.buildSettings2MainEmbed(settings);
-      const components = this.buildSettings2MainComponents();
+      const embed = this.buildSettingsMainEmbed(settings);
+      const components = this.buildSettingsMainComponents();
 
       await interaction.editReply({ embeds: [embed], components });
     } catch (error) {
@@ -1173,10 +901,10 @@ class OrbMiningDiscordBot {
     }
   }
 
-  private buildSettings2MainEmbed(settings: any): EmbedBuilder {
+  private buildSettingsMainEmbed(settings: any): EmbedBuilder {
     return new EmbedBuilder()
       .setColor(0x5865F2)
-      .setTitle('Settings (Interactive Mode)')
+      .setTitle('Settings')
       .setDescription('Select a category to configure:')
       .addFields(
         {
@@ -1203,7 +931,7 @@ class OrbMiningDiscordBot {
       .setFooter({ text: 'Click a button below to configure that category' });
   }
 
-  private buildSettings2MainComponents(): ActionRowBuilder<ButtonBuilder>[] {
+  private buildSettingsMainComponents(): ActionRowBuilder<ButtonBuilder>[] {
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId('s2_cat_swap')
@@ -1225,7 +953,7 @@ class OrbMiningDiscordBot {
     return [row];
   }
 
-  private async handleSettings2Category(interaction: ButtonInteraction, category: string) {
+  private async handleSettingsCategory(interaction: ButtonInteraction, category: string) {
     const discordId = interaction.user.id;
     await interaction.deferUpdate();
 
@@ -1332,13 +1060,23 @@ class OrbMiningDiscordBot {
           break;
 
         case 'transfer':
+          const recipientAddr = settings.transfer_recipient_address;
+          const shortAddr = recipientAddr
+            ? `${recipientAddr.slice(0, 4)}...${recipientAddr.slice(-4)}`
+            : 'Not Set';
+
           embed = new EmbedBuilder()
             .setColor(0x5865F2)
             .setTitle('Transfer Settings')
             .addFields(
               { name: 'Auto-Transfer', value: settings.auto_transfer_enabled ? '`ON`' : '`OFF`', inline: true },
               { name: 'Threshold', value: `\`${settings.orb_transfer_threshold} ORB\``, inline: true },
+              { name: 'Recipient Wallet', value: `\`${shortAddr}\``, inline: true },
             );
+
+          if (recipientAddr) {
+            embed.setDescription(`Full address: \`${recipientAddr}\``);
+          }
 
           components = [
             new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -1364,6 +1102,10 @@ class OrbMiningDiscordBot {
                 .setCustomId('s2_back')
                 .setLabel('← Back')
                 .setStyle(ButtonStyle.Secondary),
+              new ButtonBuilder()
+                .setCustomId('s2_custom:transfer_recipient_address')
+                .setLabel('Set Wallet')
+                .setStyle(ButtonStyle.Primary),
             ),
           ];
           break;
@@ -1437,14 +1179,14 @@ class OrbMiningDiscordBot {
     }
   }
 
-  private async handleSettings2Back(interaction: ButtonInteraction) {
+  private async handleSettingsBack(interaction: ButtonInteraction) {
     const discordId = interaction.user.id;
     await interaction.deferUpdate();
 
     try {
       const settings = await getUserSettings(PLATFORM, discordId);
-      const embed = this.buildSettings2MainEmbed(settings);
-      const components = this.buildSettings2MainComponents();
+      const embed = this.buildSettingsMainEmbed(settings);
+      const components = this.buildSettingsMainComponents();
 
       await interaction.editReply({ embeds: [embed], components });
     } catch (error) {
@@ -1452,7 +1194,7 @@ class OrbMiningDiscordBot {
     }
   }
 
-  private async handleSettings2Toggle(interaction: ButtonInteraction, setting: string) {
+  private async handleSettingsToggle(interaction: ButtonInteraction, setting: string) {
     const discordId = interaction.user.id;
     await interaction.deferUpdate();
 
@@ -1490,12 +1232,12 @@ class OrbMiningDiscordBot {
     }
   }
 
-  private async handleSettings2Select(interaction: StringSelectMenuInteraction, setting: string, value: string) {
+  private async handleSettingsSelect(interaction: StringSelectMenuInteraction, setting: string, value: string) {
     const discordId = interaction.user.id;
 
     if (value === 'custom') {
       // Show custom input modal
-      await this.showSettings2CustomModal(interaction, setting);
+      await this.showSettingsCustomModal(interaction, setting);
       return;
     }
 
@@ -1517,7 +1259,7 @@ class OrbMiningDiscordBot {
   private getSettingCategory(setting: string): string {
     const swapSettings = ['swap_threshold', 'slippage_bps', 'min_orb_price', 'min_orb_to_keep'];
     const stakeSettings = ['stake_threshold'];
-    const transferSettings = ['orb_transfer_threshold'];
+    const transferSettings = ['orb_transfer_threshold', 'transfer_recipient_address'];
 
     if (swapSettings.includes(setting)) return 'swap';
     if (stakeSettings.includes(setting)) return 'stake';
@@ -1633,13 +1375,19 @@ class OrbMiningDiscordBot {
         break;
 
       case 'transfer':
+        const refreshRecipientAddr = settings.transfer_recipient_address;
+        const refreshShortAddr = refreshRecipientAddr
+          ? `${refreshRecipientAddr.slice(0, 4)}...${refreshRecipientAddr.slice(-4)}`
+          : 'Not Set';
+
         embed = new EmbedBuilder()
           .setColor(0x57F287)
           .setTitle('Transfer Settings ✓')
-          .setDescription('Setting updated!')
+          .setDescription(refreshRecipientAddr ? `Full address: \`${refreshRecipientAddr}\`` : 'Setting updated!')
           .addFields(
             { name: 'Auto-Transfer', value: settings.auto_transfer_enabled ? '`ON`' : '`OFF`', inline: true },
             { name: 'Threshold', value: `\`${settings.orb_transfer_threshold} ORB\``, inline: true },
+            { name: 'Recipient Wallet', value: `\`${refreshShortAddr}\``, inline: true },
           );
 
         components = [
@@ -1666,6 +1414,10 @@ class OrbMiningDiscordBot {
               .setCustomId('s2_back')
               .setLabel('← Back')
               .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+              .setCustomId('s2_custom:transfer_recipient_address')
+              .setLabel('Set Wallet')
+              .setStyle(ButtonStyle.Primary),
           ),
         ];
         break;
@@ -1737,7 +1489,7 @@ class OrbMiningDiscordBot {
     await interaction.editReply({ embeds: [embed], components: components as any });
   }
 
-  private async showSettings2CustomModal(
+  private async showSettingsCustomModal(
     interaction: ButtonInteraction | StringSelectMenuInteraction,
     setting: string
   ) {
@@ -1796,6 +1548,11 @@ class OrbMiningDiscordBot {
         label = 'SOL Threshold, ORB Threshold (comma sep)';
         placeholder = '0.1, 1.0';
         break;
+      case 'transfer_recipient_address':
+        title = 'Set Transfer Wallet';
+        label = 'Solana Wallet Address';
+        placeholder = 'Enter wallet address...';
+        break;
       default:
         title = 'Set Value';
         label = 'Value';
@@ -1817,7 +1574,7 @@ class OrbMiningDiscordBot {
     await interaction.showModal(modal);
   }
 
-  private async handleSettings2CustomSubmit(interaction: ModalSubmitInteraction) {
+  private async handleSettingsCustomSubmit(interaction: ModalSubmitInteraction) {
     await interaction.deferUpdate();
     const discordId = interaction.user.id;
     const setting = interaction.customId.split(':')[1];
@@ -1829,6 +1586,9 @@ class OrbMiningDiscordBot {
         const [solThreshold, orbThreshold] = value.split(',').map(s => parseFloat(s.trim()));
         await updateUserSetting(PLATFORM, discordId, 'auto_claim_sol_threshold', solThreshold || 0.1);
         await updateUserSetting(PLATFORM, discordId, 'auto_claim_orb_threshold', orbThreshold || 1.0);
+      } else if (setting === 'transfer_recipient_address') {
+        // Handle string value (wallet address)
+        await updateUserSetting(PLATFORM, discordId, setting, value.trim());
       } else {
         const numValue = parseFloat(value);
         await updateUserSetting(PLATFORM, discordId, setting, numValue);
