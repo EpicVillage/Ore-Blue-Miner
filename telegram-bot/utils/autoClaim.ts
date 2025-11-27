@@ -23,6 +23,61 @@ interface TelegramUser {
   telegram_id: string;
 }
 
+interface ClaimRecord {
+  reward: string;
+  timestamp: number;
+}
+
+interface UserClaimHistory {
+  messageId: number;
+  chatId: string;
+  claims: ClaimRecord[];
+}
+
+// Track auto-claim message history per user
+const userClaimHistory: Map<string, UserClaimHistory> = new Map();
+
+/**
+ * Format relative time (e.g., "5 mins ago")
+ */
+function formatRelativeTime(timestamp: number): string {
+  const now = Date.now();
+  const diffMs = now - timestamp;
+  const diffMins = Math.floor(diffMs / 60000);
+
+  if (diffMins < 1) return 'just now';
+  if (diffMins === 1) return '1 min ago';
+  if (diffMins < 60) return `${diffMins} mins ago`;
+
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours === 1) return '1 hour ago';
+  return `${diffHours} hours ago`;
+}
+
+/**
+ * Build the auto-claim message from history
+ */
+function buildClaimMessage(claims: ClaimRecord[]): string {
+  const lines = claims.map((claim, index) => {
+    if (index === 0) {
+      // Most recent claim - no time suffix
+      return `• ${claim.reward}`;
+    } else {
+      // Older claims - show relative time
+      return `• ${claim.reward} - ${formatRelativeTime(claim.timestamp)}`;
+    }
+  });
+
+  return `✅ *Auto-Claim Successful*\n\nClaimed:\n${lines.join('\n')}`;
+}
+
+/**
+ * Reset claim history for a user (call when user sends any command)
+ */
+export function resetUserClaimHistory(telegramId: string): void {
+  userClaimHistory.delete(telegramId);
+}
+
 /**
  * Get all telegram users from database
  */
@@ -94,12 +149,64 @@ async function processUserAutoClaims(telegramId: string): Promise<void> {
       }
     }
 
-    // Send notification if any claims were made
+    // Send/update notification if any claims were made
     if (claimedRewards.length > 0 && bot) {
-      const message = `✅ *Auto-Claim Successful*\n\nClaimed:\n${claimedRewards.map(r => `• ${r}`).join('\n')}`;
+      const now = Date.now();
+      const existingHistory = userClaimHistory.get(telegramId);
+
+      // Add new claims to history
+      const newClaims: ClaimRecord[] = claimedRewards.map(reward => ({
+        reward,
+        timestamp: now,
+      }));
 
       try {
-        await bot.telegram.sendMessage(telegramId, message, { parse_mode: 'Markdown' });
+        if (existingHistory) {
+          // Update existing message - add new claims at the top
+          const updatedClaims = [...newClaims, ...existingHistory.claims];
+          const message = buildClaimMessage(updatedClaims);
+
+          try {
+            await bot.telegram.editMessageText(
+              existingHistory.chatId,
+              existingHistory.messageId,
+              undefined,
+              message,
+              { parse_mode: 'Markdown' }
+            );
+
+            // Update history
+            userClaimHistory.set(telegramId, {
+              ...existingHistory,
+              claims: updatedClaims,
+            });
+          } catch (editError: any) {
+            // If edit fails (message too old, deleted, etc.), send new message
+            if (editError.description?.includes('message to edit not found') ||
+                editError.description?.includes('message can\'t be edited')) {
+              logger.debug(`[Auto-Claim] ${telegramId}: Edit failed, sending new message`);
+              const sentMessage = await bot.telegram.sendMessage(telegramId, buildClaimMessage(newClaims), { parse_mode: 'Markdown' });
+              userClaimHistory.set(telegramId, {
+                messageId: sentMessage.message_id,
+                chatId: telegramId,
+                claims: newClaims,
+              });
+            } else {
+              throw editError;
+            }
+          }
+        } else {
+          // No existing message - send new one
+          const message = buildClaimMessage(newClaims);
+          const sentMessage = await bot.telegram.sendMessage(telegramId, message, { parse_mode: 'Markdown' });
+
+          // Store message info for future edits
+          userClaimHistory.set(telegramId, {
+            messageId: sentMessage.message_id,
+            chatId: telegramId,
+            claims: newClaims,
+          });
+        }
       } catch (error) {
         logger.warn(`[Auto-Claim] Failed to send notification to ${telegramId}:`, error);
       }

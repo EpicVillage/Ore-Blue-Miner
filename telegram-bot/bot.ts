@@ -87,7 +87,8 @@ import {
 } from './utils/orbAutoTransfer';
 import {
   initializeAutoClaim,
-  stopAutoClaim
+  stopAutoClaim,
+  resetUserClaimHistory
 } from './utils/autoClaim';
 import {
   initializeAutoSwap,
@@ -177,12 +178,19 @@ class OrbMiningBot {
    * Setup middleware for logging, error handling, and user authentication
    */
   private setupMiddleware() {
-    // Log all incoming messages
+    // Log all incoming messages and reset auto-claim history on user interaction
     this.bot.use(async (ctx, next) => {
       const username = ctx.from?.username || ctx.from?.id || 'unknown';
       const messageText = 'text' in (ctx.message || {}) ? (ctx.message as any).text : undefined;
       const callbackData = 'data' in (ctx.callbackQuery || {}) ? (ctx.callbackQuery as any).data : undefined;
       logger.info(`[Telegram] Message from @${username}: ${messageText || callbackData || 'callback'}`);
+
+      // Reset auto-claim message history when user sends any command or button click
+      // This ensures the next auto-claim sends a fresh message
+      if (ctx.from?.id) {
+        resetUserClaimHistory(ctx.from.id.toString());
+      }
+
       await next();
     });
 
