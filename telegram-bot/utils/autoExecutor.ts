@@ -280,13 +280,23 @@ async function executeUserAutomation(
         logger.info(`[Auto-Executor] User ${telegramId}: Checkpointed | ${signature}`);
 
         // Update user_rounds with winning squares for completed rounds
-        for (let roundId = startRoundId; roundId <= endRoundId; roundId++) {
+        // Limit backfill to last 10 rounds to avoid excessive RPC calls
+        const maxBackfill = 10;
+        const backfillStart = Math.max(startRoundId, endRoundId - maxBackfill + 1);
+
+        if (endRoundId - startRoundId >= maxBackfill) {
+          logger.info(`[Auto-Executor] User ${telegramId}: Skipping backfill for ${endRoundId - startRoundId - maxBackfill + 1} old rounds to save RPC calls`);
+        }
+
+        for (let roundId = backfillStart; roundId <= endRoundId; roundId++) {
           try {
             const winningSquare = await getRoundWinningSquare(roundId);
             if (winningSquare >= 0) {
               await updateRoundResult(telegramId, roundId, winningSquare);
               logger.debug(`[Auto-Executor] User ${telegramId}: Updated round ${roundId} with winning square ${winningSquare}`);
             }
+            // Small delay between RPC calls to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 200));
           } catch (updateError) {
             logger.debug(`[Auto-Executor] User ${telegramId}: Failed to update round ${roundId} result:`, updateError);
           }
