@@ -14,7 +14,7 @@ import logger from '../../src/utils/logger';
 import { getOrbPrice } from '../../src/utils/jupiter';
 import { getUserSettings } from './userSettings';
 import { getUserWallet } from './userWallet';
-import { recordUserRound, getUserDeployedSquares } from './userRounds';
+import { recordUserRound, getUserDeployedSquares, updateRoundResult, getRoundWinningSquare } from './userRounds';
 
 /**
  * Automation Executor Service for Telegram Bot Users
@@ -264,6 +264,8 @@ async function executeUserAutomation(
 
     if (miner && miner.checkpointId.lt(board.roundId)) {
       const roundsBehind = board.roundId.sub(miner.checkpointId).toNumber();
+      const startRoundId = miner.checkpointId.toNumber();
+      const endRoundId = board.roundId.toNumber() - 1; // Exclude current round
       logger.info(`[Auto-Executor] User ${telegramId}: Checkpointing ${roundsBehind} round(s)...`);
 
       try {
@@ -276,6 +278,19 @@ async function executeUserAutomation(
         await connection.confirmTransaction(signature);
 
         logger.info(`[Auto-Executor] User ${telegramId}: Checkpointed | ${signature}`);
+
+        // Update user_rounds with winning squares for completed rounds
+        for (let roundId = startRoundId; roundId <= endRoundId; roundId++) {
+          try {
+            const winningSquare = await getRoundWinningSquare(roundId);
+            if (winningSquare >= 0) {
+              await updateRoundResult(telegramId, roundId, winningSquare);
+              logger.debug(`[Auto-Executor] User ${telegramId}: Updated round ${roundId} with winning square ${winningSquare}`);
+            }
+          } catch (updateError) {
+            logger.debug(`[Auto-Executor] User ${telegramId}: Failed to update round ${roundId} result:`, updateError);
+          }
+        }
 
         // Small delay after checkpoint
         await new Promise(resolve => setTimeout(resolve, 2000));
