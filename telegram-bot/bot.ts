@@ -809,6 +809,30 @@ Send your private key now, or use /cancel to abort.`,
       );
     });
 
+    // Link Discord account during onboarding
+    this.bot.action('link_from_onboarding', async (ctx) => {
+      await ctx.answerCbQuery();
+      const userId = ctx.from!.id;
+      const session = this.getSession(userId);
+      session.awaitingLinkCode = true;
+
+      await ctx.editMessageText(
+        `🔗 *Link Discord Account*
+
+If you already use our Discord bot, you can link your account to share the same wallet.
+
+📥 *Enter your link code from Discord:*
+1. Open Discord and use \`/link\` command
+2. Click "Generate Link Code"
+3. Enter the 8-character code here
+
+Example: \`AB12CD34\`
+
+Send the code now, or use /cancel to abort.`,
+        { parse_mode: 'Markdown' }
+      );
+    });
+
     // Change wallet - delete current and restart onboarding
     this.bot.action('change_wallet', async (ctx) => {
       await ctx.answerCbQuery();
@@ -1353,6 +1377,7 @@ Use the buttons below or type a command to get started.`;
       inline_keyboard: [
         [{ text: '🆕 Generate New Wallet', callback_data: 'generate_wallet' }],
         [{ text: '📥 Import Existing Wallet', callback_data: 'import_wallet' }],
+        [{ text: '🔗 Link Discord Account', callback_data: 'link_from_onboarding' }],
       ],
     };
 
@@ -1365,6 +1390,7 @@ To get started, choose an option below:
 
 🆕 *Generate New Wallet* - Create a fresh Solana wallet
 📥 *Import Existing Wallet* - Use your own private key
+🔗 *Link Discord* - Already use our Discord bot? Link your account!
 
 ⚠️ *IMPORTANT Notes:*
 • This bot is made as a casual project

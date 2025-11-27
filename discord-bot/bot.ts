@@ -2,6 +2,7 @@ import 'dotenv/config';
 import {
   Client,
   GatewayIntentBits,
+  Partials,
   REST,
   Routes,
   SlashCommandBuilder,
@@ -96,7 +97,10 @@ class OrbMiningDiscordBot {
     this.client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.DirectMessages,
+      ],
+      partials: [
+        Partials.Channel, // Required to receive DM events
       ],
     });
 
@@ -221,6 +225,9 @@ class OrbMiningDiscordBot {
       case 'refresh_status':
         await this.handleStatusRefresh(interaction);
         break;
+      case 'link_from_onboarding':
+        await this.handleLinkFromOnboarding(interaction);
+        break;
       default:
         await interaction.reply({
           content: 'Unknown action',
@@ -305,10 +312,10 @@ class OrbMiningDiscordBot {
           '**Options:**\n' +
           '🆕 **Generate New Wallet** - Create a fresh wallet\n' +
           '📥 **Import Wallet** - Use your existing private key\n' +
-          '🔗 **Link Telegram** - If you already use our Telegram bot'
+          '🔗 **Link Telegram** - Already use our Telegram bot? Link your account!'
         );
 
-      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
           .setCustomId('generate_wallet')
           .setLabel('Generate New Wallet')
@@ -321,7 +328,15 @@ class OrbMiningDiscordBot {
           .setEmoji('📥'),
       );
 
-      await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+      const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId('link_from_onboarding')
+          .setLabel('Link Telegram Account')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('🔗'),
+      );
+
+      await interaction.reply({ embeds: [embed], components: [row1, row2], ephemeral: true });
     }
   }
 
@@ -744,6 +759,59 @@ class OrbMiningDiscordBot {
       logger.error('[Discord] Error unlinking:', error);
       await interaction.editReply({
         embeds: [formatErrorEmbed('Error', 'Failed to unlink accounts.')],
+      });
+    }
+  }
+
+  /**
+   * Handle link from onboarding button
+   */
+  private async handleLinkFromOnboarding(interaction: ButtonInteraction) {
+    await interaction.deferReply({ ephemeral: true });
+
+    const discordId = interaction.user.id;
+
+    try {
+      // Check if already linked
+      const linked = await getLinkedAccount(PLATFORM, discordId);
+      if (linked?.linked_at && linked?.telegram_id) {
+        const embed = new EmbedBuilder()
+          .setColor(0x57F287)
+          .setTitle('✅ Already Linked')
+          .setDescription(
+            `Your account is already linked to Telegram ID: \`${linked.telegram_id}\`\n\n` +
+            'Use `/link` to manage your linked account.'
+          );
+
+        await interaction.editReply({ embeds: [embed] });
+        return;
+      }
+
+      // Show linking options
+      const embed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle('🔗 Link Telegram Account')
+        .setDescription(
+          'Link your Telegram account to share your wallet across platforms.\n\n' +
+          '**Option 1: Generate code here**\n' +
+          'Generate a code and use it in our Telegram bot.\n\n' +
+          '**Option 2: Have a code from Telegram?**\n' +
+          'Use `/link <code>` to link instantly.'
+        );
+
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId('link_generate')
+          .setLabel('Generate Link Code')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('🔑')
+      );
+
+      await interaction.editReply({ embeds: [embed], components: [row] });
+    } catch (error) {
+      logger.error('[Discord] Error in link from onboarding:', error);
+      await interaction.editReply({
+        embeds: [formatErrorEmbed('Error', 'Failed to start linking process.')],
       });
     }
   }
