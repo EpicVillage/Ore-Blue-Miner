@@ -1766,7 +1766,7 @@ class OrbMiningDiscordBot {
         // Handle compound setting
         const [solThreshold, orbThreshold] = value.split(',').map(s => parseFloat(s.trim()));
         await updateUserSetting(PLATFORM, discordId, 'auto_claim_sol_threshold', solThreshold || 0.1);
-        await updateUserSetting(PLATFORM, discordId, 'auto_claim_orb_threshold', orbThreshold || 1.0);
+        await updateUserSetting(PLATFORM, discordId, 'auto_claim_orb_threshold', orbThreshold || 10000);
       } else if (setting === 'transfer_recipient_address') {
         // Handle string value (wallet address)
         await updateUserSetting(PLATFORM, discordId, setting, value.trim());
